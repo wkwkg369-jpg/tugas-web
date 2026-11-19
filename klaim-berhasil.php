@@ -4,65 +4,106 @@ $current_page = 'riwayat';
 require_once __DIR__ . '/includes/header.php';
 
 $user = get_logged_in_user();
-$userId = $user ? $user['id'] : 1;
-$userName = $user ? $user['nama'] : 'Budi Pratama';
-$userEmail = $user ? $user['email'] : 'budi.pratama@ui.ac.id';
-$userPhone = $user ? $user['phone'] : '081234567890';
 
+/* Klaim wajib login: tanpa akun, status klaim tidak akan pernah terlihat pemiliknya. */
+if (!$user) {
+    set_flash_message('error', 'Silakan masuk terlebih dahulu untuk mengajukan klaim kepemilikan.');
+    header('Location: masuk.php');
+    exit;
+}
+
+$userId = (int) $user['id'];
 $item = null;
-$kodeKlaim = 'KLM-2026-' . random_int(8820, 8999);
+$kodeKlaim = '';
+$namaBarang = '';
 $waktuKlaim = date('d M Y, H:i') . ' WIB';
+$statusKlaim = 'Dalam Verifikasi';
+$errorKlaim = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $itemId = intval($_POST['item_id'] ?? 1);
-    $item = get_item_by_id($itemId);
+    $itemId = (int) ($_POST['item_id'] ?? 0);
+    $item = $itemId ? get_item_by_id($itemId) : null;
     $jawaban = trim($_POST['jawaban_verifikasi'] ?? '');
 
-    // Handle Upload Bukti
+    if (!$item) {
+        $errorKlaim = 'Barang yang Anda klaim tidak ditemukan.';
+    } elseif (mb_strlen($jawaban) < 10) {
+        $errorKlaim = 'Jawaban verifikasi minimal 10 karakter agar petugas dapat menilai kepemilikan.';
+    } elseif (get_user_claim_for_item($userId, $itemId)) {
+        $errorKlaim = 'Anda sudah mengajukan klaim untuk barang ini. Pantau statusnya di Riwayat Saya.';
+    } elseif ((int) ($item['pelapor_id'] ?? 0) === $userId) {
+        $errorKlaim = 'Anda tidak dapat mengklaim laporan milik sendiri.';
+    } elseif (!in_array($item['status'], ['Ditemukan', 'Hilang', 'Dalam Verifikasi'], true)
+              || in_array($item['status'], ['Dikembalikan', 'Ditutup'], true)) {
+        $errorKlaim = 'Barang ini tidak lagi dapat diklaim (status: ' . $item['status'] . ').';
+    }
+
+    // Upload bukti pendukung
     $buktiFilename = null;
-    if (isset($_FILES['bukti_klaim']) && $_FILES['bukti_klaim']['error'] === UPLOAD_ERR_OK) {
+    if ($errorKlaim === '' && isset($_FILES['bukti_klaim']) && $_FILES['bukti_klaim']['error'] === UPLOAD_ERR_OK) {
         $tmpName = $_FILES['bukti_klaim']['tmp_name'];
         $origName = basename($_FILES['bukti_klaim']['name']);
         $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-        if (in_array($ext, ['jpg', 'jpeg', 'png', 'pdf'])) {
-            $buktiFilename = 'proof_' . time() . '_' . random_int(100, 999) . '.' . $ext;
-            move_uploaded_file($tmpName, __DIR__ . '/assets/uploads/' . $buktiFilename);
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'pdf'])) {
+            $buktiFilename = 'proof_' . date('Ymd_His') . '_' . random_int(100, 999) . '.' . $ext;
+            if (!move_uploaded_file($tmpName, __DIR__ . '/assets/uploads/' . $buktiFilename)) {
+                $buktiFilename = null;
+                $errorKlaim = 'Bukti pendukung gagal disimpan. Silakan coba lagi tanpa lampiran.';
+            }
+        } else {
+            $errorKlaim = 'Format bukti harus JPG, PNG, WEBP, atau PDF.';
         }
     }
 
-    if ($item) {
-        // Insert Claim
-        db_execute("INSERT INTO claims (kode_klaim, item_id, user_id, nama_pengklaim, email_pengklaim, phone_pengklaim, jawaban_verifikasi, bukti_foto, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Dalam Verifikasi')", [
-            $kodeKlaim,
-            $item['id'],
-            $userId,
-            $userName,
-            $userEmail,
-            $userPhone,
-            $jawaban,
-            $buktiFilename
+    if ($errorKlaim === '') {
+        $hasil = create_claim([
+            'item_id' => (int) $item['id'],
+            'user_id' => $userId,
+            'nama' => $user['nama'],
+            'email' => $user['email'],
+            'phone' => $user['phone'] ?? null,
+            'jawaban' => $jawaban,
+            'bukti' => $buktiFilename,
+            'item_nama' => $item['nama'],
         ]);
 
-        // Update item status to 'Dalam Verifikasi'
-        db_execute("UPDATE items SET status = 'Dalam Verifikasi' WHERE id = ?", [$item['id']]);
-
-        // Add user notification
-        db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread) VALUES (?, ?, ?, 'check-circle', 1)", [
-            $userId,
-            'Pengajuan Klaim Berhasil Diterima!',
-            "Klaim Anda (#{$kodeKlaim}) untuk barang '{$item['nama']}' telah masuk ke antrean verifikasi petugas keamanan kampus."
-        ]);
+        if ($hasil['ok']) {
+            $kodeKlaim = $hasil['kode'];
+            $namaBarang = $item['nama'];
+        } else {
+            $errorKlaim = $hasil['error'];
+        }
     }
-}
 
-if (!$item) {
-    // If accessed directly via GET, load recent claim or item
-    $claims = get_user_claims($userId);
-    $recentClaim = !empty($claims) ? $claims[0] : null;
-    $namaBarang = $recentClaim ? $recentClaim['item_nama'] : 'Tumbler Hydro Flask 32oz Biru Dongker';
-    $kodeKlaim = $recentClaim ? $recentClaim['kode_klaim'] : 'KLM-2026-8821';
+    if ($errorKlaim !== '') {
+        // Tampilkan status klaim terakhir milik pengguna bila ada, supaya halaman tidak kosong.
+        $terakhir = db_fetch_one(
+            "SELECT c.*, i.nama AS item_nama FROM claims c JOIN items i ON i.id = c.item_id
+             WHERE c.user_id = ? ORDER BY c.id DESC LIMIT 1",
+            [$userId]
+        );
+        if ($terakhir) {
+            $kodeKlaim = $terakhir['kode_klaim'];
+            $namaBarang = $terakhir['item_nama'];
+            $statusKlaim = $terakhir['status'];
+        }
+    }
 } else {
-    $namaBarang = $item['nama'];
+    // Akses GET: tampilkan klaim terakhir milik pengguna (bukan klaim orang lain).
+    $terakhir = db_fetch_one(
+        "SELECT c.*, i.nama AS item_nama FROM claims c JOIN items i ON i.id = c.item_id
+         WHERE c.user_id = ? ORDER BY c.id DESC LIMIT 1",
+        [$userId]
+    );
+    if (!$terakhir) {
+        set_flash_message('info', 'Belum ada klaim yang diajukan. Pilih barang temuan di katalog lalu ajukan klaim.');
+        header('Location: pencarian.php');
+        exit;
+    }
+    $kodeKlaim = $terakhir['kode_klaim'];
+    $namaBarang = $terakhir['item_nama'];
+    $statusKlaim = $terakhir['status'];
+    $waktuKlaim = date('d M Y, H:i', strtotime($terakhir['created_at'])) . ' WIB';
 }
 
 require_once __DIR__ . '/includes/navbar.php';
@@ -71,50 +112,84 @@ require_once __DIR__ . '/includes/navbar.php';
 <main class="flex-1 py-14 flex items-center justify-center px-4">
     <!-- Card Klaim Berhasil (Figma: Card Klaim Berhasil 520x490) -->
     <div class="card-default w-full max-w-[520px] p-8 sm:p-10 rounded-card bg-white border border-slate-200 shadow-card text-center">
-        
-        <!-- Icon Circle Sukses (56x56, soft green) -->
-        <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center mb-6">
-            <i data-lucide="check-circle" class="w-8 h-8"></i>
-        </div>
 
-        <!-- Judul H2 & Deskripsi -->
-        <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
-            Klaim Berhasil Diajukan!
-        </h1>
-        <p class="mt-3 text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
-            Bukti kepemilikan Anda telah kami terima dan diteruskan ke petugas keamanan. Kami akan memverifikasi klaim ini dalam 1x24 jam kerja.
-        </p>
+        <?php if ($errorKlaim !== ''): ?>
+            <!-- Keadaan gagal: jelaskan alasannya, jangan pura-pura sukses -->
+            <div class="w-14 h-14 rounded-full bg-red-100 text-red-600 mx-auto flex items-center justify-center mb-6">
+                <i data-lucide="alert-circle" class="w-8 h-8"></i>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                Klaim Belum Dapat Diproses
+            </h1>
+            <div class="mt-4 p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700 text-left leading-relaxed">
+                <?= htmlspecialchars($errorKlaim) ?>
+            </div>
 
-        <!-- Box Ringkasan Klaim (Figma: Box Ringkasan Klaim 440x110) -->
-        <div class="mt-6 p-4 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-2">
-            <div class="flex items-center justify-between text-xs text-slate-400">
-                <span>ID Pengajuan: <strong class="text-slate-600 font-mono">#<?= htmlspecialchars($kodeKlaim) ?></strong></span>
-                <span><?= htmlspecialchars($waktuKlaim) ?></span>
-            </div>
-            <div class="text-base font-bold text-slate-900 truncate">
-                <?= htmlspecialchars($namaBarang) ?>
-            </div>
-            <div class="pt-1 flex items-center justify-between">
-                <span class="text-xs text-slate-500">Status Klaim Saat Ini:</span>
-                <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                    <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                    <span>Dalam Verifikasi</span>
-                </span>
-            </div>
-        </div>
+            <?php if ($kodeKlaim !== ''): ?>
+                <div class="mt-5 p-4 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-2">
+                    <div class="text-xs text-slate-400">Klaim terakhir Anda:</div>
+                    <div class="font-mono text-xs text-slate-600">#<?= htmlspecialchars($kodeKlaim) ?></div>
+                    <div class="text-sm font-semibold text-slate-900 truncate"><?= htmlspecialchars($namaBarang) ?></div>
+                    <div class="pt-1 flex items-center justify-between">
+                        <span class="text-xs text-slate-500">Status Klaim:</span>
+                        <?= render_status_badge($statusKlaim, 'sm') ?>
+                    </div>
+                </div>
+            <?php endif; ?>
 
-        <!-- Action Buttons -->
-        <div class="mt-8 space-y-3">
-            <a href="riwayat.php?tab=klaim" class="w-full btn-primary h-12 rounded-btn text-sm font-semibold shadow-sm flex items-center justify-center gap-2">
-                <i data-lucide="file-text" class="w-4 h-4"></i>
-                <span>Pantau Status di Riwayat Saya</span>
-            </a>
-            <div>
-                <a href="index.php" class="text-sm text-slate-500 hover:text-slate-800 font-medium inline-block py-2 transition-colors">
-                    Kembali ke Halaman Beranda
+            <div class="mt-7 space-y-3">
+                <a href="pencarian.php" class="w-full btn-primary h-12 rounded-btn text-sm font-semibold shadow-sm flex items-center justify-center gap-2">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                    <span>Kembali ke Pencarian</span>
+                </a>
+                <a href="riwayat.php?tab=klaim" class="w-full btn-secondary h-11 rounded-btn text-sm font-medium flex items-center justify-center gap-2">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                    <span>Lihat Riwayat Klaim</span>
                 </a>
             </div>
-        </div>
+
+        <?php else: ?>
+            <!-- Icon Circle Sukses (56x56, soft green) -->
+            <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center mb-6">
+                <i data-lucide="check-circle" class="w-8 h-8"></i>
+            </div>
+
+            <!-- Judul H2 & Deskripsi -->
+            <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                Klaim Berhasil Diajukan!
+            </h1>
+            <p class="mt-3 text-sm text-slate-500 leading-relaxed max-w-md mx-auto">
+                Bukti kepemilikan Anda telah kami terima dan diteruskan ke petugas keamanan. Kami akan memverifikasi klaim ini dalam 1x24 jam kerja.
+            </p>
+
+            <!-- Box Ringkasan Klaim (Figma: Box Ringkasan Klaim 440x110) -->
+            <div class="mt-6 p-4 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-2">
+                <div class="flex items-center justify-between text-xs text-slate-400">
+                    <span>ID Pengajuan: <strong class="text-slate-600 font-mono">#<?= htmlspecialchars($kodeKlaim) ?></strong></span>
+                    <span><?= htmlspecialchars($waktuKlaim) ?></span>
+                </div>
+                <div class="text-base font-bold text-slate-900 truncate">
+                    <?= htmlspecialchars($namaBarang) ?>
+                </div>
+                <div class="pt-1 flex items-center justify-between">
+                    <span class="text-xs text-slate-500">Status Klaim Saat Ini:</span>
+                    <?= render_status_badge($statusKlaim, 'sm') ?>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="mt-8 space-y-3">
+                <a href="riwayat.php?tab=klaim" class="w-full btn-primary h-12 rounded-btn text-sm font-semibold shadow-sm flex items-center justify-center gap-2">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>
+                    <span>Pantau Status di Riwayat Saya</span>
+                </a>
+                <div>
+                    <a href="index.php" class="text-sm text-slate-500 hover:text-slate-800 font-medium inline-block py-2 transition-colors">
+                        Kembali ke Halaman Beranda
+                    </a>
+                </div>
+            </div>
+        <?php endif; ?>
 
     </div>
 </main>

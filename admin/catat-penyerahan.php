@@ -75,6 +75,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ]);
         }
 
+        // 5. Notifikasi untuk admin & petugas: barang sudah diserahkan
+        notify_admins(
+            'Penyerahan Barang Dicatat',
+            "Barang '{$item['nama']}' (#{$item['kode']}) telah diserahkan kepada {$namaPenerima}" . (!empty($nimPenerima) ? " ({$nimPenerima})" : "") . " oleh {$petugas}. No. Berita Acara: {$noBa}.",
+            'hand-helping',
+            'admin/index.php'
+        );
+
         $successReceipt = [
             'no_ba' => $noBa,
             'item_nama' => $item['nama'],

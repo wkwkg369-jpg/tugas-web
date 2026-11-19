@@ -59,6 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $pelaporId = $user ? $user['id'] : 1;
         $pelaporNama = $user ? ($user['nama'] . ' (Mahasiswa)') : 'Budi Pratama (Mahasiswa)';
+        // Notifikasi hanya untuk pengguna yang benar-benar login (tamu tidak dipinjami akun lain)
+        $notifyUid = $user ? (int) $user['id'] : 0;
 
         $sql = "INSERT INTO items (
             kode, nama, kategori, kategori_slug, status, jenis_laporan, lokasi, lokasi_singkat,
@@ -84,12 +86,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         if ($ok) {
-            // Create user notification
-            db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link) VALUES (?, ?, ?, 'bell', 1, 'riwayat.php?tab=laporan')", [
-                $pelaporId,
+            // Notifikasi untuk pelapor
+            notify_user(
+                $notifyUid,
                 'Laporan Barang Hilang Terkirim!',
-                "Laporan '{$nama_barang}' (#{$kode}) telah berhasil didaftarkan dan segera ditinjau oleh petugas keamanan."
-            ]);
+                "Laporan '{$nama_barang}' (#{$kode}) telah berhasil didaftarkan dan segera ditinjau oleh petugas keamanan.",
+                'bell',
+                'riwayat.php?tab=laporan'
+            );
+
+            // Notifikasi untuk admin & petugas: ada laporan kehilangan baru
+            notify_admins(
+                'Laporan Kehilangan Baru Masuk',
+                "Laporan kehilangan '{$nama_barang}' (#{$kode}) dari {$pelaporNama} menunggu verifikasi petugas.",
+                'clipboard-list',
+                'admin/verifikasi-laporan.php'
+            );
 
             set_flash_message('success', "Laporan barang hilang '{$nama_barang}' berhasil dibuat dengan ID #{$kode}! Menunggu verifikasi petugas.");
             header('Location: riwayat.php?tab=laporan');

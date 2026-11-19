@@ -109,7 +109,119 @@ function format_item_data(array $it): array {
     return $it;
 }
 
+// ---------------------------------------------------------------------------
+// Klaim kepemilikan
+// ---------------------------------------------------------------------------
+
+/** Kode klaim unik: KLM-YYYY-XXXX, dicoba ulang bila bentrok (kolom UNIQUE). */
+function generate_kode_klaim(): string {
+    for ($i = 0; $i < 25; $i++) {
+        $kode = 'KLM-' . date('Y') . '-' . str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT);
+        if (!db_fetch_one("SELECT 1 AS x FROM claims WHERE kode_klaim = ?", [$kode])) {
+            return $kode;
+        }
+    }
+    return 'KLM-' . date('Y') . '-' . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+}
+
+/** Klaim milik seorang pengguna untuk satu barang (null bila belum pernah). */
+function get_user_claim_for_item(int $userId, int $itemId): ?array {
+    return db_fetch_one(
+        "SELECT * FROM claims WHERE user_id = ? AND item_id = ? ORDER BY id DESC LIMIT 1",
+        [$userId, $itemId]
+    );
+}
+
+/**
+ * Simpan pengajuan klaim + perbarui status barang + kirim notifikasi.
+ * Semua langkah dalam satu transaksi supaya status tidak pernah setengah jadi.
+ *
+ * @return array{ok: bool, kode: string, id: int, error: string}
+ */
+function create_claim(array $d): array {
+    $hasil = ['ok' => false, 'kode' => '', 'id' => 0, 'error' => ''];
+    $pdo = get_db();
+
+    $kode = generate_kode_klaim();
+    try {
+        $pdo->beginTransaction();
+
+        db_execute(
+            "INSERT INTO claims (kode_klaim, item_id, user_id, nama_pengklaim, email_pengklaim,
+                                 phone_pengklaim, jawaban_verifikasi, bukti_foto, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Dalam Verifikasi', ?)",
+            [$kode, (int) $d['item_id'], (int) $d['user_id'], $d['nama'], $d['email'] ?? null,
+             $d['phone'] ?? null, $d['jawaban'], $d['bukti'] ?? null, date('Y-m-d H:i:s')]
+        );
+        $claimId = (int) db_last_insert_id();
+
+        // Barang masuk antrean verifikasi (jangan turunkan status yang sudah final)
+        db_execute(
+            "UPDATE items SET status = 'Dalam Verifikasi' WHERE id = ? AND status IN ('Ditemukan', 'Hilang')",
+            [(int) $d['item_id']]
+        );
+
+        $pdo->commit();
+
+        notify_user(
+            (int) $d['user_id'],
+            'Pengajuan Klaim Berhasil Diterima!',
+            "Klaim Anda (#{$kode}) untuk barang '{$d['item_nama']}' telah masuk ke antrean verifikasi petugas keamanan kampus.",
+            'shield-check',
+            'riwayat.php?tab=klaim'
+        );
+        notify_admins(
+            'Klaim Kepemilikan Baru',
+            "Klaim #{$kode} untuk barang '{$d['item_nama']}' oleh {$d['nama']} menunggu verifikasi.",
+            'shield-question',
+            'admin/verifikasi-klaim.php'
+        );
+
+        $hasil['ok'] = true;
+        $hasil['kode'] = $kode;
+        $hasil['id'] = $claimId;
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        $hasil['error'] = 'Klaim gagal disimpan: ' . $e->getMessage();
+    }
+
+    return $hasil;
+}
+
 // Data Notifikasi
+
+/**
+ * Kirim satu notifikasi ke pengguna tertentu.
+ * Dilewati bila user tidak valid, dan created_at diisi eksplisit agar urutan waktu benar.
+ */
+function notify_user(?int $userId, string $judul, string $pesan, string $icon = 'bell', string $link = '#'): bool {
+    if (!$userId || (int) $userId <= 0) {
+        return false;
+    }
+    return db_execute(
+        "INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link, created_at)
+         VALUES (?, ?, ?, ?, 1, ?, ?)",
+        [(int) $userId, $judul, $pesan, $icon, $link, date('Y-m-d H:i:s')]
+    );
+}
+
+/**
+ * Kirim notifikasi ke semua admin & petugas keamanan.
+ * Dipakai saat ada laporan baru / barang diserahkan agar petugas tahu ada antrean.
+ */
+function notify_admins(string $judul, string $pesan, string $icon = 'bell', string $link = '#'): int {
+    $rows = db_fetch_all("SELECT id FROM users WHERE role IN ('admin', 'petugas')");
+    $terkirim = 0;
+    foreach ($rows as $r) {
+        if (notify_user((int) $r['id'], $judul, $pesan, $icon, $link)) {
+            $terkirim++;
+        }
+    }
+    return $terkirim;
+}
+
 function get_mock_notifications(?int $userId = null): array {
     if ($userId === null) {
         $user = get_logged_in_user();
@@ -207,14 +319,20 @@ function render_status_badge($status, $size = 'normal'): string {
         'Ditemukan' => 'bg-emerald-50 text-emerald-600 border border-emerald-200',
         'Dalam Verifikasi' => 'bg-amber-50 text-amber-600 border border-amber-200',
         'Dikembalikan' => 'bg-indigo-50 text-indigo-600 border border-indigo-200',
+        'Disetujui' => 'bg-emerald-50 text-emerald-600 border border-emerald-200',
+        'Ditolak' => 'bg-red-50 text-red-600 border border-red-200',
+        'Selesai' => 'bg-blue-50 text-blue-700 border border-blue-200',
         'Ditutup' => 'bg-slate-100 text-slate-500 border border-slate-200'
     ];
-    
+
     $dotClasses = [
         'Hilang' => 'bg-red-500',
         'Ditemukan' => 'bg-emerald-500',
         'Dalam Verifikasi' => 'bg-amber-500',
         'Dikembalikan' => 'bg-indigo-500',
+        'Disetujui' => 'bg-emerald-500',
+        'Ditolak' => 'bg-red-500',
+        'Selesai' => 'bg-blue-500',
         'Ditutup' => 'bg-slate-400'
     ];
     

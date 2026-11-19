@@ -7,63 +7,77 @@ $user = get_logged_in_user();
 $errorMessage = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $nama_barang = trim($_POST['nama_barang'] ?? '');
     $jenis_barang = trim($_POST['jenis_barang'] ?? '');
     $lokasi_penemuan = trim($_POST['lokasi_penemuan'] ?? '');
     $waktu_raw = trim($_POST['waktu_penemuan'] ?? '');
     $tempat_simpan = trim($_POST['tempat_simpan'] ?? '');
     $deskripsi_tambahan = trim($_POST['deskripsi_tambahan'] ?? '');
 
-    if (empty($jenis_barang) || empty($lokasi_penemuan) || empty($tempat_simpan)) {
+    $fotoError = $_FILES['foto_temuan']['error'] ?? UPLOAD_ERR_NO_FILE;
+
+    if (empty($nama_barang) || empty($jenis_barang) || empty($lokasi_penemuan) || empty($tempat_simpan)) {
         $errorMessage = 'Semua kolom bertanda bintang (*) wajib diisi.';
+    } elseif (mb_strlen($nama_barang) < 3) {
+        $errorMessage = 'Nama barang yang ditemukan minimal 3 karakter.';
+    } elseif ($fotoError === UPLOAD_ERR_NO_FILE) {
+        $errorMessage = 'Foto barang temuan wajib diunggah.';
+    } elseif ($fotoError !== UPLOAD_ERR_OK) {
+        $errorMessage = 'Gagal mengunggah foto (kode ' . (int) $fotoError . '). Silakan pilih ulang file.';
+    } elseif (($_FILES['foto_temuan']['size'] ?? 0) > 5 * 1024 * 1024) {
+        $errorMessage = 'Ukuran foto maksimal 5 MB.';
     } else {
         $waktuFormatted = !empty($waktu_raw) ? date('d M Y, H:i', strtotime($waktu_raw)) . ' WIB' : date('d M Y, H:i') . ' WIB';
 
-        // Categorize
+        // Kategori mengikuti jenis barang; nama barang memakai isian pengguna.
         $kategori = 'Aksesoris & Botol Minum';
         $slug = 'aksesoris';
         $icon = 'sparkles';
-        $namaBarang = $jenis_barang;
+        $namaBarang = $nama_barang;
 
         if (stripos($jenis_barang, 'Elektronik') !== false || stripos($jenis_barang, 'HP') !== false || stripos($jenis_barang, 'Laptop') !== false) {
             $kategori = 'Elektronik & Gadget';
             $slug = 'elektronik';
             $icon = 'smartphone';
-            $namaBarang = 'Elektronik / Gadget Temuan';
         } elseif (stripos($jenis_barang, 'Dompet') !== false || stripos($jenis_barang, 'KTM') !== false) {
             $kategori = 'Dompet & Kartu Identitas';
             $slug = 'dompet';
             $icon = 'wallet';
-            $namaBarang = 'Dompet / Kartu Identitas Temuan';
         } elseif (stripos($jenis_barang, 'Kunci') !== false) {
             $kategori = 'Kunci Kendaraan';
             $slug = 'kunci';
             $icon = 'key-round';
-            $namaBarang = 'Kunci Kendaraan Temuan';
         } elseif (stripos($jenis_barang, 'Tas') !== false || stripos($jenis_barang, 'Pakaian') !== false || stripos($jenis_barang, 'Jaket') !== false) {
             $kategori = 'Tas & Pakaian';
             $slug = 'tas';
             $icon = 'backpack';
-            $namaBarang = 'Tas / Pakaian Temuan';
-        } else {
-            $namaBarang = 'Barang Temuan: ' . $jenis_barang;
         }
 
-        // Handle File Upload
+        // Handle File Upload (WAJIB)
         $fotoFilename = null;
-        if (isset($_FILES['foto_temuan']) && $_FILES['foto_temuan']['error'] === UPLOAD_ERR_OK) {
-            $tmpName = $_FILES['foto_temuan']['tmp_name'];
-            $origName = basename($_FILES['foto_temuan']['name']);
-            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                $fotoFilename = 'found_' . time() . '_' . random_int(100, 999) . '.' . $ext;
-                $targetPath = __DIR__ . '/assets/uploads/' . $fotoFilename;
-                move_uploaded_file($tmpName, $targetPath);
+        $tmpName = $_FILES['foto_temuan']['tmp_name'];
+        $origName = basename($_FILES['foto_temuan']['name']);
+        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+            $errorMessage = 'Format foto harus JPG, PNG, atau WEBP.';
+        } else {
+            $fotoFilename = 'found_' . time() . '_' . random_int(100, 999) . '.' . $ext;
+            $targetPath = __DIR__ . '/assets/uploads/' . $fotoFilename;
+            if (!move_uploaded_file($tmpName, $targetPath)) {
+                $fotoFilename = null;
+                $errorMessage = 'Foto gagal disimpan di server. Silakan coba lagi.';
             }
         }
+
+        if (!empty($errorMessage)) {
+            // Validasi gagal: lompati penyimpanan data.
+        } else {
 
         $kode = 'TRX-' . random_int(88220, 88999);
         $pelaporId = $user ? $user['id'] : 1;
         $pelaporNama = $user ? ($user['nama'] . ' (Mahasiswa)') : 'Budi Pratama (Mahasiswa)';
+        // Notifikasi hanya untuk pengguna yang benar-benar login (tamu tidak dipinjami akun lain)
+        $notifyUid = $user ? (int) $user['id'] : 0;
 
         $deskripsi = "Ditemukan {$jenis_barang} di {$lokasi_penemuan}. Saat ini barang disimpan di: {$tempat_simpan}.";
         if (!empty($deskripsi_tambahan)) {
@@ -94,17 +108,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         if ($ok) {
-            db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link) VALUES (?, ?, ?, 'package-check', 1, 'riwayat.php?tab=laporan')", [
-                $pelaporId,
+            // Notifikasi untuk pelapor
+            notify_user(
+                $notifyUid,
                 'Laporan Temuan Berhasil Dibuat!',
-                "Terima kasih atas kebaikan Anda. Laporan temuan '{$namaBarang}' (#{$kode}) telah tercatat di sistem dan menunggu verifikasi petugas keamanan."
-            ]);
+                "Terima kasih atas kebaikan Anda. Laporan temuan '{$namaBarang}' (#{$kode}) telah tercatat di sistem dan menunggu verifikasi petugas keamanan.",
+                'package-check',
+                'riwayat.php?tab=laporan'
+            );
+
+            // Notifikasi untuk admin & petugas: ada laporan temuan baru di antrean verifikasi
+            notify_admins(
+                'Laporan Temuan Baru Masuk',
+                "Laporan temuan '{$namaBarang}' (#{$kode}) dari {$pelaporNama} di {$lokasi_penemuan} menunggu verifikasi.",
+                'clipboard-list',
+                'admin/verifikasi-laporan.php'
+            );
 
             set_flash_message('success', "Laporan temuan berhasil dikirim! Kode laporan: #{$kode}. Menunggu verifikasi petugas.");
             header('Location: riwayat.php?tab=laporan');
             exit;
         } else {
             $errorMessage = 'Gagal menyimpan laporan temuan. Silakan periksa kembali formulir Anda.';
+        }
         }
     }
 }
@@ -147,8 +173,31 @@ require_once __DIR__ . '/includes/navbar.php';
                 </div>
             <?php endif; ?>
 
-            <form action="lapor-temuan.php" method="POST" enctype="multipart/form-data" class="space-y-6">
-                
+            <form action="lapor-temuan.php" method="POST" enctype="multipart/form-data" class="space-y-6" onsubmit="return cekFotoTemuan(this)">
+
+                <!-- Nama Barang yang Ditemukan -->
+                <div>
+                    <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1.5">
+                        Nama Barang yang Ditemukan <span class="text-red-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                            <i data-lucide="package" class="w-4 h-4"></i>
+                        </div>
+                        <input
+                            type="text"
+                            name="nama_barang"
+                            required
+                            minlength="3"
+                            maxlength="120"
+                            value="<?= htmlspecialchars($_POST['nama_barang'] ?? '') ?>"
+                            placeholder="Contoh: Tumbler Hydro Flask 32oz Biru"
+                            class="input-default pl-10"
+                        >
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-1">Tulis nama/jenis barang sedetail mungkin agar pemilik mudah menemukannya.</p>
+                </div>
+
                 <!-- Jenis / Kategori Barang Dropdown -->
                 <div>
                     <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1.5">
@@ -170,10 +219,10 @@ require_once __DIR__ . '/includes/navbar.php';
                     </div>
                 </div>
 
-                <!-- Foto Barang Temuan -->
+                <!-- Foto Barang Temuan (WAJIB) -->
                 <div>
                     <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1.5">
-                        Foto Barang Temuan (Opsional)
+                        Foto Barang Temuan <span class="text-red-500">*</span>
                     </label>
                     <div class="upload-zone p-6 text-center rounded-btn bg-slate-50 border-2 border-dashed border-slate-200 hover:border-primary transition-colors cursor-pointer" onclick="this.querySelector('input').click()">
                         <input type="file" name="foto_temuan" class="hidden" accept="image/*" onchange="previewUpload(this)">
@@ -182,7 +231,7 @@ require_once __DIR__ . '/includes/navbar.php';
                                 <i data-lucide="camera" class="w-5 h-5"></i>
                             </div>
                             <span class="text-xs md:text-sm font-medium">Ambil foto langsung atau <span class="text-primary underline">pilih file gambar barang temuan</span></span>
-                            <span class="text-[11px] text-slate-400">Pastikan ciri khusus utama tidak terlalu jelas di foto agar aman saat verifikasi</span>
+                            <span class="text-[11px] text-slate-400">Wajib diunggah — JPG/PNG/WEBP maks 5 MB. Pastikan ciri khusus utama tidak terlalu jelas di foto agar aman saat verifikasi</span>
                         </div>
                         <div class="upload-preview hidden flex-col items-center justify-center gap-1 text-emerald-600">
                             <i data-lucide="check-circle" class="w-6 h-6"></i>
@@ -266,6 +315,20 @@ require_once __DIR__ . '/includes/navbar.php';
 </main>
 
 <script>
+function cekFotoTemuan(form) {
+    var input = form.querySelector('input[name="foto_temuan"]');
+    if (!input || !input.files || input.files.length === 0) {
+        var zone = form.querySelector('.upload-zone');
+        if (zone) {
+            zone.classList.add('border-red-400', 'bg-red-50');
+            zone.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        alert('Foto barang temuan wajib diunggah.');
+        return false;
+    }
+    return true;
+}
+
 function previewUpload(input) {
     if (input.files && input.files[0]) {
         const zone = input.closest('.upload-zone');

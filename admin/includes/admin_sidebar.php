@@ -66,9 +66,18 @@ $currentUser = get_logged_in_user();
             <i data-lucide="bar-chart-2" class="w-5 h-5 <?= $active_tab === 'rekap' ? 'text-white' : 'text-slate-400' ?>"></i>
             <span>Rekap Laporan</span>
         </a>
+        <!-- 9. Notifikasi -->
+        <?php $unreadNotif = get_unread_notifications_count(); ?>
+        <a href="../notifikasi.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium">
+            <i data-lucide="bell" class="w-5 h-5 text-slate-400"></i>
+            <span>Notifikasi</span>
+            <?php if ($unreadNotif > 0): ?>
+                <span class="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold text-white">
+                    <?= $unreadNotif > 9 ? '9+' : (int) $unreadNotif ?>
+                </span>
+            <?php endif; ?>
+        </a>
     </div>
-
-    <!-- Admin Profile Box matching Figma bottom card -->
     <div class="p-4 mt-auto">
         <div class="bg-[#131D33] p-3 rounded-2xl flex items-center justify-between border border-slate-800/60 shadow-sm">
             <div class="flex items-center gap-3 min-w-0">

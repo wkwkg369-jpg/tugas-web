@@ -17,6 +17,15 @@ if (!$item) {
     require_once __DIR__ . '/includes/footer.php';
     exit;
 }
+
+// Status klaim pengguna ini pada barang tersebut (agar tidak mengklaim dua kali
+// dan agar status klaim langsung terlihat di halaman detail).
+$user = get_logged_in_user();
+$klaimSaya = $user ? get_user_claim_for_item((int) $user['id'], (int) $item['id']) : null;
+$bolehKlaim = in_array($item['status'], ['Ditemukan', 'Hilang', 'Dalam Verifikasi'], true)
+    && $item['status'] !== 'Dikembalikan'
+    && $item['status'] !== 'Ditutup'
+    && !$klaimSaya;
 ?>
 
 <main class="flex-1 py-10">
@@ -162,13 +171,32 @@ if (!$item) {
 
                     <!-- Action Buttons -->
                     <div class="pt-4 border-t border-slate-100 flex flex-wrap items-center gap-4">
-                        <?php if ($item['status'] === 'Ditemukan' || $item['status'] === 'Dalam Verifikasi'): ?>
-                            <button type="button" class="btn-open-klaim btn-primary h-12 px-8 rounded-btn text-base font-semibold shadow-sm flex items-center gap-2">
-                                <i data-lucide="hand-helping" class="w-5 h-5"></i>
-                                <span>Ini Barang Saya (Klaim)</span>
-                            </button>
+                        <?php if ($klaimSaya): ?>
+                            <div class="w-full p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
+                                <i data-lucide="shield-check" class="w-5 h-5 text-amber-600 shrink-0 mt-0.5"></i>
+                                <div class="text-xs sm:text-sm">
+                                    <p class="font-bold text-amber-900">Klaim Anda sudah diajukan</p>
+                                    <p class="text-amber-800 mt-0.5">
+                                        ID <strong class="font-mono">#<?= htmlspecialchars($klaimSaya['kode_klaim']) ?></strong>
+                                        &middot; status
+                                        <?= render_status_badge($klaimSaya['status'], 'sm') ?>
+                                    </p>
+                                </div>
+                            </div>
+                        <?php elseif ($bolehKlaim): ?>
+                            <?php if ($user): ?>
+                                <button type="button" class="btn-open-klaim btn-primary h-12 px-8 rounded-btn text-base font-semibold shadow-sm flex items-center gap-2">
+                                    <i data-lucide="hand-helping" class="w-5 h-5"></i>
+                                    <span>Ini Barang Saya (Klaim)</span>
+                                </button>
+                            <?php else: ?>
+                                <a href="masuk.php" class="btn-primary h-12 px-8 rounded-btn text-base font-semibold shadow-sm flex items-center gap-2">
+                                    <i data-lucide="log-in" class="w-5 h-5"></i>
+                                    <span>Masuk untuk Klaim</span>
+                                </a>
+                            <?php endif; ?>
                         <?php endif; ?>
-                        
+
                         <a href="riwayat.php" class="btn-secondary h-12 px-6 rounded-btn text-sm font-medium">
                             <span>Cek Riwayat Saya</span>
                         </a>
@@ -183,6 +211,7 @@ if (!$item) {
 </main>
 
 <!-- Modal Klaim Kepemilikan (Figma: Modal Container 560x520) -->
+<?php if ($bolehKlaim && $user): ?>
 <div id="modalKlaim" class="hidden fixed inset-0 z-50 modal-overlay items-center justify-center p-4">
     <div class="bg-white w-full max-w-[560px] rounded-card shadow-modal border border-slate-200 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-200">
         
@@ -276,5 +305,6 @@ function previewUploadKlaim(input) {
     }
 }
 </script>
+<?php endif; ?>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
