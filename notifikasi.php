@@ -44,6 +44,7 @@ require_once __DIR__ . '/includes/navbar.php';
                 </div>
             <?php else: ?>
                 <?php foreach ($notifications as $notif): ?>
+                    <?php $tautan = $notif['link'] ?? ''; $adaTautan = $tautan !== '' && $tautan !== '#'; ?>
                     <div class="p-5 flex items-start gap-4 transition-colors <?= $notif['unread'] ? 'bg-blue-50/50 hover:bg-blue-50' : 'hover:bg-slate-50' ?>">
                         <!-- Icon Box -->
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 <?= $notif['unread'] ? 'bg-blue-100 text-primary' : 'bg-slate-100 text-slate-500' ?>">
@@ -68,6 +69,12 @@ require_once __DIR__ . '/includes/navbar.php';
                             <p class="mt-1 text-xs sm:text-sm leading-relaxed <?= $notif['unread'] ? 'text-slate-700' : 'text-slate-500' ?>">
                                 <?= htmlspecialchars($notif['pesan']) ?>
                             </p>
+                            <?php if ($adaTautan): ?>
+                                <a href="<?= htmlspecialchars($tautan) ?>" class="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                                    <span>Lihat detail</span>
+                                    <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                                </a>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
