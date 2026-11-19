@@ -189,6 +189,15 @@ $usersList = db_fetch_all($sql, $params);
 ?>
 
 <div class="flex-1 flex flex-col bg-[#F8FAFC] overflow-y-auto min-w-0">
+    <!-- Saran program studi dari master data admin -->
+    <datalist id="prodiSuggestions">
+        <?php foreach (get_study_program_labels(true) as $prodiLabel): ?>
+            <option value="<?= htmlspecialchars($prodiLabel) ?>"></option>
+        <?php endforeach; ?>
+        <?php foreach (get_faculties(true) as $fak): ?>
+            <option value="<?= htmlspecialchars($fak) ?>"></option>
+        <?php endforeach; ?>
+    </datalist>
     <!-- Top Header matching Figma -->
     <header class="px-8 pt-8 pb-6 flex items-center justify-between shrink-0">
         <div>
@@ -447,7 +456,7 @@ $usersList = db_fetch_all($sql, $params);
 
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fakultas / Unit Kerja</label>
-                <input type="text" name="prodi" placeholder="Misal: Biro Pengamanan Kampus / Fasilkom" required
+                <input type="text" name="prodi" placeholder="Misal: Biro Pengamanan Kampus / Fasilkom" required list="prodiSuggestions"
                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
             </div>
 
@@ -627,7 +636,7 @@ $usersList = db_fetch_all($sql, $params);
 
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1.5">Unit Kerja / Fakultas</label>
-                <input type="text" name="prodi" id="editProdi" required
+                <input type="text" name="prodi" id="editProdi" required list="prodiSuggestions"
                     class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
             </div>
 

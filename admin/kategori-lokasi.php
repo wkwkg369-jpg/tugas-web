@@ -7,7 +7,7 @@ require_once __DIR__ . '/../includes/data.php';
 require_admin('../masuk.php');
 
 $activeSubTab = $_GET['tab'] ?? 'kategori';
-if (!in_array($activeSubTab, ['kategori', 'lokasi'])) {
+if (!in_array($activeSubTab, ['kategori', 'lokasi', 'prodi'], true)) {
     $activeSubTab = 'kategori';
 }
 
@@ -46,11 +46,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         set_flash_message('success', "Data kategori '$namaKat' berhasil diperbarui!");
         header('Location: kategori-lokasi.php?tab=kategori');
         exit;
+    } elseif ($action === 'tambah_prodi') {
+        $namaProdi = trim($_POST['nama_prodi'] ?? '');
+        $fakultasProdi = trim($_POST['fakultas_prodi'] ?? '');
+        $jenjangProdi = trim($_POST['jenjang_prodi'] ?? 'S1');
+        if ($namaProdi === '' || $fakultasProdi === '') {
+            set_flash_message('error', 'Nama program studi dan fakultas wajib diisi.');
+        } elseif (!in_array($jenjangProdi, ['D3', 'D4', 'S1', 'S2', 'S3'], true)) {
+            set_flash_message('error', 'Jenjang yang dipilih tidak dikenali.');
+        } else {
+            $existing = db_fetch_one("SELECT id FROM study_programs WHERE name = ? AND fakultas = ?", [$namaProdi, $fakultasProdi]);
+            if ($existing) {
+                set_flash_message('error', "Program studi '$namaProdi' di $fakultasProdi sudah terdaftar.");
+            } else {
+                db_execute("INSERT INTO study_programs (name, fakultas, jenjang) VALUES (?, ?, ?)", [$namaProdi, $fakultasProdi, $jenjangProdi]);
+                set_flash_message('success', "Program studi '$namaProdi - $fakultasProdi' berhasil ditambahkan!");
+            }
+        }
+        header('Location: kategori-lokasi.php?tab=prodi');
+        exit;
+    } elseif ($action === 'edit_prodi') {
+        $prodiId = intval($_POST['prodi_id'] ?? 0);
+        $namaProdi = trim($_POST['nama_prodi'] ?? '');
+        $fakultasProdi = trim($_POST['fakultas_prodi'] ?? '');
+        $jenjangProdi = trim($_POST['jenjang_prodi'] ?? 'S1');
+        if ($prodiId <= 0 || $namaProdi === '' || $fakultasProdi === '') {
+            set_flash_message('error', 'Data program studi tidak lengkap.');
+        } else {
+            $dupe = db_fetch_one("SELECT id FROM study_programs WHERE name = ? AND fakultas = ? AND id != ?", [$namaProdi, $fakultasProdi, $prodiId]);
+            if ($dupe) {
+                set_flash_message('error', "Program studi '$namaProdi' di $fakultasProdi sudah terdaftar.");
+            } else {
+                db_execute("UPDATE study_programs SET name = ?, fakultas = ?, jenjang = ? WHERE id = ?", [$namaProdi, $fakultasProdi, $jenjangProdi, $prodiId]);
+                set_flash_message('success', "Program studi '$namaProdi' berhasil diperbarui!");
+            }
+        }
+        header('Location: kategori-lokasi.php?tab=prodi');
+        exit;
+    } elseif ($action === 'toggle_prodi') {
+        $prodiId = intval($_POST['prodi_id'] ?? 0);
+        $prodi = db_fetch_one("SELECT * FROM study_programs WHERE id = ?", [$prodiId]);
+        if ($prodi) {
+            $newActive = empty($prodi['is_active']) ? 1 : 0;
+            db_execute("UPDATE study_programs SET is_active = ? WHERE id = ?", [$newActive, $prodiId]);
+            set_flash_message('info', "Program studi '{$prodi['name']}' ditandai " . ($newActive ? 'Aktif' : 'Nonaktif') . '.');
+        }
+        header('Location: kategori-lokasi.php?tab=prodi');
+        exit;
+    } elseif ($action === 'hapus_prodi') {
+        $prodiId = intval($_POST['prodi_id'] ?? 0);
+        $prodi = db_fetch_one("SELECT * FROM study_programs WHERE id = ?", [$prodiId]);
+        if ($prodi) {
+            $label = $prodi['name'] . ' - ' . $prodi['fakultas'];
+            $dipakai = db_fetch_one("SELECT COUNT(*) AS c FROM users WHERE prodi = ?", [$label]);
+            if (!empty($dipakai['c'])) {
+                set_flash_message('error', "Program studi '$label' masih dipakai {$dipakai['c']} pengguna. Nonaktifkan saja agar riwayat tetap utuh.");
+            } else {
+                db_execute("DELETE FROM study_programs WHERE id = ?", [$prodiId]);
+                set_flash_message('success', "Program studi '$label' berhasil dihapus.");
+            }
+        }
+        header('Location: kategori-lokasi.php?tab=prodi');
+        exit;
     }
 }
 
 $page_title = 'Kategori & Lokasi - SIP-Barang Admin';
 $active_tab = 'kategori_lokasi';
+$programStudiList = get_study_programs(false);
 require_once __DIR__ . '/includes/admin_header.php';
 require_once __DIR__ . '/includes/admin_sidebar.php';
 
@@ -255,7 +318,7 @@ $locationsList = [
     <!-- Top Header matching Figma -->
     <header class="px-8 pt-8 pb-6 flex items-center justify-between shrink-0">
         <div>
-            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Master Data Kategori &amp; Lokasi Kampus</h1>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Master Data Kategori, Lokasi &amp; Program Studi</h1>
         </div>
         <div>
             <?php if ($activeSubTab === 'kategori'): ?>
@@ -263,10 +326,15 @@ $locationsList = [
                     <i data-lucide="plus" class="w-4 h-4"></i>
                     <span>Tambah Kategori</span>
                 </button>
-            <?php else: ?>
+            <?php elseif ($activeSubTab === 'lokasi'): ?>
                 <button type="button" onclick="openModal('modalTambahLokasi')" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg inline-flex items-center gap-2 shadow-sm transition-colors">
                     <i data-lucide="plus" class="w-4 h-4"></i>
                     <span>Tambah Lokasi</span>
+                </button>
+            <?php else: ?>
+                <button type="button" onclick="openModal('modalTambahProdi')" class="bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm px-4 py-2.5 rounded-lg inline-flex items-center gap-2 shadow-sm transition-colors">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Tambah Program Studi</span>
                 </button>
             <?php endif; ?>
         </div>
@@ -275,8 +343,8 @@ $locationsList = [
     <!-- Main Content -->
     <main class="px-8 pb-8 space-y-6">
         
-        <!-- Toggle Tabs: Kategori Barang vs Titik Pos & Lokasi -->
-        <div class="flex items-center gap-3">
+        <!-- Toggle Tabs: Kategori Barang, Titik Pos & Lokasi, Program Studi -->
+        <div class="flex flex-wrap items-center gap-3">
             <a href="?tab=kategori" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all <?= $activeSubTab === 'kategori' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50' ?>">
                 <i data-lucide="tag" class="w-4 h-4"></i>
                 <span>Kategori Barang (<?= count($categoriesList) ?>)</span>
@@ -284,6 +352,10 @@ $locationsList = [
             <a href="?tab=lokasi" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all <?= $activeSubTab === 'lokasi' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50' ?>">
                 <i data-lucide="map-pin" class="w-4 h-4"></i>
                 <span>Titik Pos &amp; Lokasi (<?= count($locationsList) ?>)</span>
+            </a>
+            <a href="?tab=prodi" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all <?= $activeSubTab === 'prodi' ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50' ?>">
+                <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+                <span>Program Studi (<?= count($programStudiList) ?>)</span>
             </a>
         </div>
 
@@ -340,7 +412,7 @@ $locationsList = [
                 </div>
             </div>
 
-        <?php else: ?>
+        <?php elseif ($activeSubTab === 'lokasi'): ?>
             <!-- TAB 2: MASTER DATA TITIK POS & LOKASI -->
             <div class="bg-white rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.03)] overflow-hidden">
                 <div class="overflow-x-auto">
@@ -390,6 +462,91 @@ $locationsList = [
                             <?php endforeach; ?>
                         </tbody>
                     </table>
+                </div>
+            </div>
+        <?php else: ?>
+            <!-- TAB 3: MASTER DATA PROGRAM STUDI -->
+            <div class="bg-white rounded-2xl border border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.03)] overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-100 text-slate-400 text-xs font-semibold uppercase tracking-wider bg-slate-50/50">
+                                <th class="py-4 px-6 w-16">NO</th>
+                                <th class="py-4 px-6 w-20">IKON</th>
+                                <th class="py-4 px-6">PROGRAM STUDI</th>
+                                <th class="py-4 px-6">FAKULTAS</th>
+                                <th class="py-4 px-6">JENJANG</th>
+                                <th class="py-4 px-6">PENGGUNA</th>
+                                <th class="py-4 px-6">STATUS</th>
+                                <th class="py-4 px-6 text-right">AKSI</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            <?php if (empty($programStudiList)): ?>
+                                <tr>
+                                    <td colspan="8" class="py-12 text-center text-slate-400">
+                                        <p class="text-sm font-medium text-slate-600">Belum ada program studi</p>
+                                        <p class="text-xs text-slate-400 mt-1">Tambahkan program studi lewat tombol di kanan atas.</p>
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php $noProdi = 1; foreach ($programStudiList as $p): ?>
+                                    <?php
+                                        $labelProdi = $p['name'] . ' - ' . $p['fakultas'];
+                                        $jumlahPakai = db_fetch_one("SELECT COUNT(*) AS c FROM users WHERE prodi = ?", [$labelProdi]);
+                                        $jumlahPakai = intval($jumlahPakai['c'] ?? 0);
+                                        $isActive = !empty($p['is_active']);
+                                    ?>
+                                    <tr class="hover:bg-slate-50/70 transition-colors">
+                                        <td class="py-4 px-6 text-slate-500 font-medium"><?= $noProdi++ ?></td>
+                                        <td class="py-4 px-6">
+                                            <div class="w-10 h-10 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center">
+                                                <i data-lucide="graduation-cap" class="w-5 h-5"></i>
+                                            </div>
+                                        </td>
+                                        <td class="py-4 px-6">
+                                            <div class="font-semibold text-slate-900"><?= htmlspecialchars($p['name']) ?></div>
+                                            <div class="text-xs text-slate-400 mt-0.5">Tampil di form pendaftaran</div>
+                                        </td>
+                                        <td class="py-4 px-6 text-slate-600 max-w-xs"><?= htmlspecialchars($p['fakultas']) ?></td>
+                                        <td class="py-4 px-6 text-slate-600"><?= htmlspecialchars($p['jenjang']) ?></td>
+                                        <td class="py-4 px-6 font-semibold text-blue-600 text-xs"><?= $jumlahPakai ?> pengguna</td>
+                                        <td class="py-4 px-6">
+                                            <span class="text-xs font-semibold px-3 py-1 rounded-full <?= $isActive ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-500' ?>">
+                                                <?= $isActive ? 'Aktif' : 'Nonaktif' ?>
+                                            </span>
+                                        </td>
+                                        <td class="py-4 px-6 text-right">
+                                            <div class="inline-flex items-center gap-2">
+                                                <button type="button" onclick="openEditProdi(<?= (int) $p['id'] ?>, '<?= addslashes($p['name']) ?>', '<?= addslashes($p['fakultas']) ?>', '<?= addslashes($p['jenjang']) ?>')" class="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">
+                                                    Edit
+                                                </button>
+                                                <form method="POST" action="kategori-lokasi.php?tab=prodi" class="inline">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="action" value="toggle_prodi">
+                                                    <input type="hidden" name="prodi_id" value="<?= (int) $p['id'] ?>">
+                                                    <button type="submit" class="text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">
+                                                        <?= $isActive ? 'Nonaktifkan' : 'Aktifkan' ?>
+                                                    </button>
+                                                </form>
+                                                <form method="POST" action="kategori-lokasi.php?tab=prodi" class="inline" onsubmit="return confirm('Hapus program studi <?= addslashes($p['name']) ?>? Data pengguna yang memakainya tidak diubah.');">
+                                                    <?= csrf_field() ?>
+                                                    <input type="hidden" name="action" value="hapus_prodi">
+                                                    <input type="hidden" name="prodi_id" value="<?= (int) $p['id'] ?>">
+                                                    <button type="submit" class="text-xs font-medium p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors">
+                                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-100 bg-slate-50/40 text-xs text-slate-500">
+                    Program studi yang aktif muncul di dropdown pendaftaran mahasiswa (<code>daftar.php</code>) dan jadi saran Fakultas/Unit pada form pengguna.
                 </div>
             </div>
         <?php endif; ?>
@@ -550,6 +707,104 @@ $locationsList = [
     </div>
 </div>
 
+<!-- Modal Tambah Program Studi -->
+<div id="modalTambahProdi" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 animate-in fade-in zoom-in-95">
+        <div class="flex items-center gap-2.5 pb-4 mb-4 border-b border-slate-100">
+            <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+            </div>
+            <div>
+                <h3 class="font-bold text-slate-900 text-base">Tambah Program Studi</h3>
+                <p class="text-xs text-slate-400">Program studi aktif langsung muncul di form pendaftaran</p>
+            </div>
+        </div>
+        <form method="POST" action="kategori-lokasi.php?tab=prodi" class="space-y-4">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="tambah_prodi">
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nama Program Studi</label>
+                <input type="text" name="nama_prodi" placeholder="Misal: Sistem Informasi" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fakultas</label>
+                <input type="text" name="fakultas_prodi" placeholder="Misal: Fakultas Ilmu Komputer" required list="daftarFakultas" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+                <datalist id="daftarFakultas">
+                    <?php foreach (get_faculties(false) as $f): ?>
+                        <option value="<?= htmlspecialchars($f) ?>"></option>
+                    <?php endforeach; ?>
+                </datalist>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">Jenjang</label>
+                <select name="jenjang_prodi" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+                    <option value="D3">D3</option>
+                    <option value="D4">D4</option>
+                    <option value="S1" selected>S1</option>
+                    <option value="S2">S2</option>
+                    <option value="S3">S3</option>
+                </select>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-3">
+                <button type="button" onclick="closeModal('modalTambahProdi')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                    Batal
+                </button>
+                <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition-colors inline-flex items-center gap-1.5">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Tambah</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Edit Program Studi -->
+<div id="modalEditProdi" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 animate-in fade-in zoom-in-95">
+        <div class="flex items-center gap-2.5 pb-4 mb-4 border-b border-slate-100">
+            <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+            </div>
+            <div>
+                <h3 class="font-bold text-slate-900 text-base">Edit Program Studi</h3>
+                <p class="text-xs text-slate-400">Perbarui nama, fakultas, atau jenjang</p>
+            </div>
+        </div>
+        <form method="POST" action="kategori-lokasi.php?tab=prodi" class="space-y-4">
+            <?= csrf_field() ?>
+            <input type="hidden" name="action" value="edit_prodi">
+            <input type="hidden" name="prodi_id" id="editProdiId">
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nama Program Studi</label>
+                <input type="text" name="nama_prodi" id="editNamaProdi" required class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fakultas</label>
+                <input type="text" name="fakultas_prodi" id="editFakultasProdi" required list="daftarFakultas" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1.5">Jenjang</label>
+                <select name="jenjang_prodi" id="editJenjangProdi" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+                    <option value="D3">D3</option>
+                    <option value="D4">D4</option>
+                    <option value="S1">S1</option>
+                    <option value="S2">S2</option>
+                    <option value="S3">S3</option>
+                </select>
+            </div>
+            <div class="flex items-center justify-end gap-3 pt-3">
+                <button type="button" onclick="closeModal('modalEditProdi')" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                    Batal
+                </button>
+                <button type="submit" class="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition-colors inline-flex items-center gap-1.5">
+                    <i data-lucide="save" class="w-4 h-4"></i>
+                    <span>Simpan</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 function openModal(id) {
     const m = document.getElementById(id);
@@ -586,6 +841,17 @@ function openEditKategori(nama, deskripsi) {
     document.getElementById('editNamaKategori').value = nama;
     document.getElementById('editDeskripsiKategori').value = deskripsi;
     openModal('modalEditKategori');
+}
+
+function openEditProdi(id, nama, fakultas, jenjang) {
+    document.getElementById('editProdiId').value = id;
+    document.getElementById('editNamaProdi').value = nama;
+    document.getElementById('editFakultasProdi').value = fakultas;
+    const j = document.getElementById('editJenjangProdi');
+    for (let i = 0; i < j.options.length; i++) {
+        if (j.options[i].value === jenjang) { j.selectedIndex = i; break; }
+    }
+    openModal('modalEditProdi');
 }
 
 function confirmDelete(type, name) {

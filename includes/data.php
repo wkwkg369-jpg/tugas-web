@@ -34,6 +34,41 @@ function get_locations(): array {
     return $locs;
 }
 
+// Master Program Studi
+function get_study_programs(bool $activeOnly = true): array {
+    try {
+        $sql = "SELECT id, name, fakultas, jenjang, is_active FROM study_programs";
+        if ($activeOnly) {
+            $sql .= " WHERE is_active = 1";
+        }
+        $sql .= " ORDER BY fakultas ASC, name ASC";
+        return db_fetch_all($sql);
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/** Label gabungan "Prodi - Fakultas" untuk dropdown pendaftaran & filter. */
+function get_study_program_labels(bool $activeOnly = true): array {
+    $labels = [];
+    foreach (get_study_programs($activeOnly) as $p) {
+        $labels[] = $p['name'] . ' - ' . $p['fakultas'];
+    }
+    return $labels;
+}
+
+/** Daftar fakultas unik dari master prodi. */
+function get_faculties(bool $activeOnly = true): array {
+    $rows = get_study_programs($activeOnly);
+    $faculties = [];
+    foreach ($rows as $r) {
+        if (!in_array($r['fakultas'], $faculties, true)) {
+            $faculties[] = $r['fakultas'];
+        }
+    }
+    return $faculties;
+}
+
 // Data Semua Barang (Katalog & Beranda)
 function get_mock_items(): array {
     return get_items();

@@ -56,8 +56,8 @@ $currentUser = get_logged_in_user();
         </a>
 
         <!-- 7. Kategori & Lokasi -->
-        <a href="kategori-lokasi.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm transition-all <?= $active_tab === 'kategori_lokasi' ? 'bg-[#1E293B] text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium' ?>">
-            <i data-lucide="tag" class="w-5 h-5 <?= $active_tab === 'kategori_lokasi' ? 'text-white' : 'text-slate-400' ?>"></i>
+        <a href="kategori-lokasi.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm transition-all <?= in_array($active_tab, ['kategori_lokasi', 'program_studi'], true) ? 'bg-[#1E293B] text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium' ?>">
+            <i data-lucide="tag" class="w-5 h-5 <?= in_array($active_tab, ['kategori_lokasi', 'program_studi'], true) ? 'text-white' : 'text-slate-400' ?>"></i>
             <span>Kategori & Lokasi</span>
         </a>
 

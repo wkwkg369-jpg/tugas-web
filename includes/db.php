@@ -88,6 +88,8 @@ class Database {
         }
 
         if ($tableExists) {
+            // Migrasi ringan untuk database lama: tabel program studi master data.
+            self::ensureStudyProgramsTable($pdo, $driver);
             return;
         }
 
@@ -275,6 +277,69 @@ class Database {
 
         // Seed Initial Mock Data
         self::seedData($pdo);
+
+        // Master data program studi (dikelola dari dashboard admin).
+        self::ensureStudyProgramsTable($pdo, $driver);
+    }
+
+    /**
+     * Tabel program studi sebagai master data. Dipanggil setiap koneksi dan
+     * idempoten, sehingga database lama ikut termigrasi tanpa langkah manual.
+     * Mengembalikan true bila tabel baru saja dibuat (perlu seed awal).
+     */
+    private static function ensureStudyProgramsTable(PDO $pdo, string $driver): bool {
+        if ($driver === 'sqlite') {
+            $exists = $pdo->query("SELECT name FROM sqlite_master WHERE type='table' AND name='study_programs'")->fetch();
+            if (!empty($exists)) {
+                return false;
+            }
+            $pdo->exec("CREATE TABLE IF NOT EXISTS study_programs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                fakultas TEXT NOT NULL,
+                jenjang TEXT NOT NULL DEFAULT 'S1',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (name, fakultas)
+            )");
+        } else {
+            $exists = $pdo->query("SHOW TABLES LIKE 'study_programs'")->fetch();
+            if (!empty($exists)) {
+                return false;
+            }
+            $pdo->exec("CREATE TABLE IF NOT EXISTS `study_programs` (
+                `id` INT AUTO_INCREMENT PRIMARY KEY,
+                `name` VARCHAR(150) NOT NULL,
+                `fakultas` VARCHAR(150) NOT NULL,
+                `jenjang` VARCHAR(10) NOT NULL DEFAULT 'S1',
+                `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY `uniq_prodi_scope` (`name`, `fakultas`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        }
+
+        self::seedStudyPrograms($pdo);
+        return true;
+    }
+
+    /** Seed awal prodi agar daftar yang sebelumnya statis tetap tersedia. */
+    private static function seedStudyPrograms(PDO $pdo): void {
+        $programs = [
+            ['Sistem Informasi', 'Fakultas Ilmu Komputer', 'S1'],
+            ['Ilmu Komputer', 'Fakultas Ilmu Komputer', 'S1'],
+            ['Teknik Elektro', 'Fakultas Teknik', 'S1'],
+            ['Teknik Industri', 'Fakultas Teknik', 'S1'],
+            ['Manajemen', 'Fakultas Ekonomi & Bisnis', 'S1'],
+            ['Ilmu Hukum', 'Fakultas Hukum', 'S1'],
+        ];
+        try {
+            $stmt = $pdo->prepare("INSERT INTO study_programs (name, fakultas, jenjang) VALUES (?, ?, ?)");
+            foreach ($programs as $p) {
+                $stmt->execute($p);
+            }
+        } catch (Throwable $e) {
+            // Seed hanya pelengkap: jika unik bentrok, data yang ada tetap dipakai.
+        }
     }
 
     private static function seedData(PDO $pdo): void {

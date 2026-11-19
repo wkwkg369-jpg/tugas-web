@@ -16,6 +16,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$programStudi = get_study_programs(true);
+$prodiLabels = [];
+foreach ($programStudi as $p) {
+    $prodiLabels[] = $p['name'] . ' - ' . $p['fakultas'];
+}
+
 require_once __DIR__ . '/includes/navbar.php';
 ?>
 
@@ -122,12 +128,12 @@ require_once __DIR__ . '/includes/navbar.php';
                                 </div>
                                 <select name="prodi" required class="input-default pl-10 text-slate-700 bg-white">
                                     <option value="" disabled <?= empty($_POST['prodi']) ? 'selected' : '' ?>>Pilih Program Studi & Fakultas</option>
-                                    <option value="Sistem Informasi - Fakultas Ilmu Komputer" <?= ($_POST['prodi'] ?? '') === 'Sistem Informasi - Fakultas Ilmu Komputer' ? 'selected' : '' ?>>Sistem Informasi - Fakultas Ilmu Komputer</option>
-                                    <option value="Ilmu Komputer - Fakultas Ilmu Komputer" <?= ($_POST['prodi'] ?? '') === 'Ilmu Komputer - Fakultas Ilmu Komputer' ? 'selected' : '' ?>>Ilmu Komputer - Fakultas Ilmu Komputer</option>
-                                    <option value="Teknik Elektro - Fakultas Teknik" <?= ($_POST['prodi'] ?? '') === 'Teknik Elektro - Fakultas Teknik' ? 'selected' : '' ?>>Teknik Elektro - Fakultas Teknik</option>
-                                    <option value="Teknik Industri - Fakultas Teknik" <?= ($_POST['prodi'] ?? '') === 'Teknik Industri - Fakultas Teknik' ? 'selected' : '' ?>>Teknik Industri - Fakultas Teknik</option>
-                                    <option value="Manajemen - Fakultas Ekonomi & Bisnis" <?= ($_POST['prodi'] ?? '') === 'Manajemen - Fakultas Ekonomi & Bisnis' ? 'selected' : '' ?>>Manajemen - Fakultas Ekonomi & Bisnis</option>
-                                    <option value="Ilmu Hukum - Fakultas Hukum" <?= ($_POST['prodi'] ?? '') === 'Ilmu Hukum - Fakultas Hukum' ? 'selected' : '' ?>>Ilmu Hukum - Fakultas Hukum</option>
+                                    <?php foreach ($prodiLabels as $label): ?>
+                                        <option value="<?= htmlspecialchars($label) ?>" <?= ($_POST['prodi'] ?? '') === $label ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                                    <?php endforeach; ?>
+                                    <?php if (!empty($_POST['prodi']) && !in_array($_POST['prodi'], $prodiLabels, true)): ?>
+                                        <option value="<?= htmlspecialchars($_POST['prodi']) ?>" selected><?= htmlspecialchars($_POST['prodi']) ?></option>
+                                    <?php endif; ?>
                                 </select>
                             </div>
                         </div>
