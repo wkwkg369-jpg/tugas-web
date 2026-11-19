@@ -4,31 +4,43 @@ $current_page = 'cari';
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/navbar.php';
 
-$allItems = get_mock_items();
 $searchQuery = isset($_GET['q']) ? trim($_GET['q']) : '';
+$statusFilter = isset($_GET['status']) ? trim($_GET['status']) : '';
+$categoryFilter = isset($_GET['kategori']) ? trim($_GET['kategori']) : '';
+$locationFilter = isset($_GET['lokasi']) ? trim($_GET['lokasi']) : '';
+
+$filters = [];
+if (!empty($searchQuery)) $filters['q'] = $searchQuery;
+if (!empty($statusFilter) && $statusFilter !== 'all') $filters['status'] = $statusFilter;
+if (!empty($categoryFilter) && $categoryFilter !== 'all') $filters['kategori'] = $categoryFilter;
+if (!empty($locationFilter) && $locationFilter !== 'Semua Lokasi Kampus') $filters['lokasi'] = $locationFilter;
+
+$allItems = get_items($filters);
 $locations = get_locations();
+$categories = get_categories();
 ?>
 
 <main class="flex-1 py-8">
     <div class="max-w-[1200px] mx-auto px-4 sm:px-6">
         
         <!-- Search Bar Top (Figma: Search Bar 1200x56) -->
-        <div class="card-default p-2 flex items-center gap-3 rounded-btn bg-white border border-slate-200 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all mb-8">
+        <form action="pencarian.php" method="GET" class="card-default p-2 flex items-center gap-3 rounded-btn bg-white border border-slate-200 shadow-sm focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all mb-8">
             <div class="pl-3 text-slate-400">
                 <i data-lucide="search" class="w-5 h-5"></i>
             </div>
             <input 
                 type="text" 
+                name="q"
                 id="searchInput" 
                 value="<?= htmlspecialchars($searchQuery) ?>" 
                 placeholder="Cari nama barang hilang, ciri khusus, atau tempat kejadian..." 
                 class="w-full bg-transparent border-none text-slate-900 text-sm md:text-base placeholder-slate-400 focus:outline-none focus:ring-0 py-2"
             >
-            <button type="button" class="btn-primary h-11 px-6 rounded-btn text-sm font-medium whitespace-nowrap">
+            <button type="submit" class="btn-primary h-11 px-6 rounded-btn text-sm font-medium whitespace-nowrap">
                 <i data-lucide="search" class="w-4 h-4"></i>
                 <span>Cari</span>
             </button>
-        </div>
+        </form>
 
         <!-- Main Content Area: Sidebar Filter & Grid Results -->
         <div class="flex flex-col lg:flex-row gap-8 items-start">
@@ -92,26 +104,14 @@ $locations = get_locations();
                                 <input type="checkbox" value="all" class="filter-category rounded text-primary focus:ring-blue-500 w-4 h-4" checked>
                                 <span>Semua Kategori</span>
                             </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
-                                <input type="checkbox" value="Elektronik & Gadget" class="filter-category rounded text-primary focus:ring-blue-500 w-4 h-4">
-                                <span>Elektronik & Gadget</span>
-                            </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
-                                <input type="checkbox" value="Dompet & Kartu Identitas" class="filter-category rounded text-primary focus:ring-blue-500 w-4 h-4">
-                                <span>Dompet & Kartu</span>
-                            </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
-                                <input type="checkbox" value="Kunci Kendaraan" class="filter-category rounded text-primary focus:ring-blue-500 w-4 h-4">
-                                <span>Kunci Kendaraan</span>
-                            </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
-                                <input type="checkbox" value="Tas & Pakaian" class="filter-category rounded text-primary focus:ring-blue-500 w-4 h-4">
-                                <span>Tas & Pakaian</span>
-                            </label>
-                            <label class="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
-                                <input type="checkbox" value="Aksesoris & Botol Minum" class="filter-category rounded text-primary focus:ring-blue-500 w-4 h-4">
-                                <span>Aksesoris & Botol Minum</span>
-                            </label>
+                            <?php foreach ($categories as $cat): ?>
+                                <?php if ($cat['id'] !== 'all'): ?>
+                                    <label class="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
+                                        <input type="checkbox" value="<?= htmlspecialchars($cat['name']) ?>" class="filter-category rounded text-primary focus:ring-blue-500 w-4 h-4">
+                                        <span><?= htmlspecialchars($cat['name']) ?></span>
+                                    </label>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
                         </div>
                     </div>
 
@@ -126,14 +126,6 @@ $locations = get_locations();
                                     <option value="<?= htmlspecialchars($loc) ?>"><?= htmlspecialchars($loc) ?></option>
                                 <?php endforeach; ?>
                             </select>
-                        </div>
-                    </div>
-
-                    <!-- Waktu Kejadian -->
-                    <div>
-                        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Waktu Kejadian</h4>
-                        <div class="relative">
-                            <input type="date" class="input-default py-2 text-sm text-slate-700" placeholder="Pilih tanggal">
                         </div>
                     </div>
 
@@ -157,6 +149,13 @@ $locations = get_locations();
                     </div>
                 </div>
 
+                <!-- Empty State if no items -->
+                <div id="noResultsAlert" class="<?= empty($allItems) ? '' : 'hidden' ?> card-default p-12 bg-white rounded-card border border-slate-200 text-center">
+                    <i data-lucide="search-x" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+                    <h3 class="text-base font-bold text-slate-800">Tidak ada barang yang cocok</h3>
+                    <p class="text-xs text-slate-500 mt-1 max-w-sm mx-auto">Coba ubah kata kunci pencarian atau sesuaikan opsi filter lokasi dan kategori Anda.</p>
+                </div>
+
                 <!-- Cards Grid (Figma: Card 1 to 9) -->
                 <div id="catalogGrid" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
                     <?php foreach ($allItems as $item): ?>
@@ -167,11 +166,15 @@ $locations = get_locations();
                             data-status="<?= htmlspecialchars($item['status']) ?>"
                             data-lokasi="<?= htmlspecialchars($item['lokasi']) ?> <?= htmlspecialchars($item['lokasi_singkat']) ?>"
                         >
-                            <!-- Photo Placeholder with Icon -->
+                            <!-- Photo / Icon Placeholder -->
                             <a href="detail.php?id=<?= $item['id'] ?>" class="h-36 bg-slate-100 flex items-center justify-center relative overflow-hidden group-hover:opacity-95 transition-opacity">
-                                <div class="w-14 h-14 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-slate-400 group-hover:scale-105 transition-transform">
-                                    <i data-lucide="<?= htmlspecialchars($item['icon']) ?>" class="w-7 h-7"></i>
-                                </div>
+                                <?php if (!empty($item['foto']) && file_exists(__DIR__ . '/assets/uploads/' . $item['foto'])): ?>
+                                    <img src="assets/uploads/<?= htmlspecialchars($item['foto']) ?>" alt="<?= htmlspecialchars($item['nama']) ?>" class="w-full h-full object-cover">
+                                <?php else: ?>
+                                    <div class="w-14 h-14 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-slate-400 group-hover:scale-105 transition-transform">
+                                        <i data-lucide="<?= htmlspecialchars($item['icon']) ?>" class="w-7 h-7"></i>
+                                    </div>
+                                <?php endif; ?>
                                 <div class="absolute top-2.5 right-2.5">
                                     <?= render_status_badge($item['status'], 'sm') ?>
                                 </div>
@@ -199,9 +202,10 @@ $locations = get_locations();
                                     </div>
                                 </div>
 
-                                <div class="mt-3">
-                                    <a href="detail.php?id=<?= $item['id'] ?>" class="w-full btn-secondary py-1.5 text-xs font-semibold rounded-btn">
-                                        Detail Barang
+                                <div class="mt-4 pt-1">
+                                    <a href="detail.php?id=<?= $item['id'] ?>" class="w-full btn-soft-primary h-9 rounded-btn text-xs font-semibold flex items-center justify-center gap-1.5 group-hover:bg-primary group-hover:text-white transition-all">
+                                        <span>Lihat Detail</span>
+                                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
                                     </a>
                                 </div>
                             </div>
@@ -209,41 +213,8 @@ $locations = get_locations();
                     <?php endforeach; ?>
                 </div>
 
-                <!-- Empty State (Hidden by default) -->
-                <div id="emptySearchState" class="hidden text-center py-16 bg-white rounded-card border border-slate-200 p-8 my-4">
-                    <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center mb-4">
-                        <i data-lucide="search-x" class="w-8 h-8"></i>
-                    </div>
-                    <h3 class="text-lg font-bold text-slate-900">Barang tidak ditemukan</h3>
-                    <p class="text-sm text-slate-500 mt-1 max-w-md mx-auto">
-                        Tidak ada barang yang cocok dengan kriteria filter atau kata kunci pencarian Anda. Coba reset filter atau gunakan kata kunci lain.
-                    </p>
-                </div>
-
-                <!-- Pagination Simple (Figma: Pagination Simple 320x40) -->
-                <div class="mt-8 flex items-center justify-center">
-                    <nav class="inline-flex items-center gap-1 p-1 bg-white rounded-btn border border-slate-200 shadow-sm text-sm">
-                        <button type="button" class="px-3 py-1.5 text-slate-400 hover:text-slate-700 flex items-center gap-1 rounded font-medium disabled:opacity-50">
-                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
-                            <span class="hidden sm:inline">Sebelumnya</span>
-                        </button>
-                        <span class="w-8 h-8 flex items-center justify-center rounded bg-primary text-white font-semibold text-xs">
-                            1
-                        </span>
-                        <a href="#" class="w-8 h-8 flex items-center justify-center rounded text-slate-700 hover:bg-slate-100 font-medium text-xs">
-                            2
-                        </a>
-                        <a href="#" class="w-8 h-8 flex items-center justify-center rounded text-slate-700 hover:bg-slate-100 font-medium text-xs">
-                            3
-                        </a>
-                        <button type="button" class="px-3 py-1.5 text-slate-700 hover:text-primary flex items-center gap-1 rounded font-medium">
-                            <span class="hidden sm:inline">Selanjutnya</span>
-                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                        </button>
-                    </nav>
-                </div>
-
             </div>
+
         </div>
 
     </div>

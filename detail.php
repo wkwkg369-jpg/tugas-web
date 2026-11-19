@@ -5,18 +5,17 @@ require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/navbar.php';
 
 $id = isset($_GET['id']) ? intval($_GET['id']) : 1;
-$items = get_mock_items();
+$item = get_item_by_id($id);
 
-// Find item or default to item 1
-$item = null;
-foreach ($items as $it) {
-    if ($it['id'] === $id) {
-        $item = $it;
-        break;
-    }
-}
 if (!$item) {
-    $item = $items[0];
+    $allItems = get_items();
+    $item = !empty($allItems) ? $allItems[0] : null;
+}
+
+if (!$item) {
+    echo '<main class="flex-1 py-16 text-center"><p class="text-slate-500">Barang tidak ditemukan.</p><a href="pencarian.php" class="btn-primary mt-4 inline-block px-4 py-2">Kembali ke Pencarian</a></main>';
+    require_once __DIR__ . '/includes/footer.php';
+    exit;
 }
 ?>
 
@@ -38,14 +37,18 @@ if (!$item) {
             <!-- Left Column: Photo Carousel & Notice Cards (5 cols) -->
             <div class="lg:col-span-5 space-y-4">
                 
-                <!-- Placeholder Foto Besar (Figma: 540x460) -->
+                <!-- Placeholder / Foto Barang (Figma: 540x460) -->
                 <div class="card-default rounded-card overflow-hidden bg-slate-100 border border-slate-200 relative">
                     <div class="h-80 sm:h-96 flex flex-col items-center justify-center relative p-6 text-center">
-                        <div class="w-20 h-20 rounded-2xl bg-white/90 shadow-sm flex items-center justify-center text-slate-400 mb-3">
-                            <i data-lucide="<?= htmlspecialchars($item['icon']) ?>" class="w-10 h-10"></i>
-                        </div>
-                        <p class="text-sm font-medium text-slate-500">Foto Utama Barang <?= htmlspecialchars($item['status']) ?></p>
-                        <p class="text-xs text-slate-400 mt-1"><?= htmlspecialchars($item['nama']) ?></p>
+                        <?php if (!empty($item['foto']) && file_exists(__DIR__ . '/assets/uploads/' . $item['foto'])): ?>
+                            <img src="assets/uploads/<?= htmlspecialchars($item['foto']) ?>" alt="<?= htmlspecialchars($item['nama']) ?>" class="w-full h-full object-cover rounded-xl">
+                        <?php else: ?>
+                            <div class="w-20 h-20 rounded-2xl bg-white/90 shadow-sm flex items-center justify-center text-slate-400 mb-3">
+                                <i data-lucide="<?= htmlspecialchars($item['icon']) ?>" class="w-10 h-10"></i>
+                            </div>
+                            <p class="text-sm font-medium text-slate-500">Foto Utama Barang <?= htmlspecialchars($item['status']) ?></p>
+                            <p class="text-xs text-slate-400 mt-1"><?= htmlspecialchars($item['nama']) ?></p>
+                        <?php endif; ?>
 
                         <!-- Prev & Next Carousel Buttons -->
                         <button type="button" class="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/90 shadow-md border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-white hover:text-primary transition-all">
@@ -112,7 +115,7 @@ if (!$item) {
                         <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                             <span class="text-xs text-slate-400 font-medium flex items-center gap-1.5 mb-1">
                                 <i data-lucide="map-pin" class="w-3.5 h-3.5 text-primary"></i>
-                                <span>Lokasi Ditemukan</span>
+                                <span><?= $item['status'] === 'Hilang' ? 'Perkiraan Lokasi Kehilangan' : 'Lokasi Ditemukan' ?></span>
                             </span>
                             <p class="text-sm font-semibold text-slate-800">
                                 <?= htmlspecialchars($item['lokasi']) ?>
@@ -121,7 +124,7 @@ if (!$item) {
                         <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                             <span class="text-xs text-slate-400 font-medium flex items-center gap-1.5 mb-1">
                                 <i data-lucide="calendar" class="w-3.5 h-3.5 text-primary"></i>
-                                <span>Waktu Penemuan</span>
+                                <span>Waktu Kejadian</span>
                             </span>
                             <p class="text-sm font-semibold text-slate-800">
                                 <?= htmlspecialchars($item['waktu']) ?>
@@ -153,7 +156,7 @@ if (!$item) {
                             <i data-lucide="archive" class="w-4 h-4"></i>
                         </div>
                         <div class="text-xs sm:text-sm font-medium">
-                            <span class="font-bold">Tempat Barang Disimpan:</span> <?= htmlspecialchars($item['tempat_simpan']) ?>
+                            <span class="font-bold">Tempat Barang Disimpan:</span> <?= htmlspecialchars($item['tempat_simpan'] ?: 'Dalam pencarian') ?>
                         </div>
                     </div>
 
@@ -197,7 +200,9 @@ if (!$item) {
         </div>
 
         <!-- Modal Body & Form -->
-        <form id="formKlaim" action="klaim-berhasil.php" method="POST" class="p-5 sm:p-6 space-y-4">
+        <form id="formKlaim" action="klaim-berhasil.php" method="POST" enctype="multipart/form-data" class="p-5 sm:p-6 space-y-4">
+            <input type="hidden" name="item_id" value="<?= $item['id'] ?>">
+            
             <!-- Item Banner -->
             <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
                 <i data-lucide="package" class="w-4 h-4 text-primary shrink-0"></i>
@@ -207,16 +212,16 @@ if (!$item) {
             <!-- Verification Question -->
             <div>
                 <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1">
-                    Pertanyaan Verifikasi Kepemilikan:
+                    Pertanyaan Verifikasi Kepemilikan: <span class="text-red-500">*</span>
                 </label>
                 <p class="text-xs text-primary font-medium mb-2 italic">
-                    "Sebutkan stiker, tanda goresan khusus, atau isi tumbler/barang saat tertinggal:"
+                    "Sebutkan ciri khusus rahasia, isi di dalam barang, stiker/goresan unik, atau nomor seri barang:"
                 </p>
                 <textarea 
                     name="jawaban_verifikasi" 
                     rows="3" 
                     required
-                    placeholder="Contoh: Di bagian bawah ada stiker bulat Fakultas Ilmu Komputer dan sedikit penyok di sudut tutup..."
+                    placeholder="Contoh: Di bagian bawah ada stiker bulat FIK dan sedikit penyok di sudut tutup..." 
                     class="input-default text-xs md:text-sm"
                 ></textarea>
             </div>
@@ -224,10 +229,10 @@ if (!$item) {
             <!-- Upload Bukti Pendukung -->
             <div>
                 <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1">
-                    Upload Bukti Pendukung (Foto Lama / Struk Pembelian)
+                    Upload Bukti Pendukung (Foto Lama / Struk Pembelian / Box)
                 </label>
-                <div class="upload-zone p-4 text-center rounded-btn bg-slate-50">
-                    <input type="file" name="bukti_klaim" class="hidden" accept="image/*,.pdf">
+                <div class="upload-zone p-4 text-center rounded-btn bg-slate-50 border-2 border-dashed border-slate-200 hover:border-primary transition-colors cursor-pointer" onclick="this.querySelector('input').click()">
+                    <input type="file" name="bukti_klaim" class="hidden" accept="image/*,.pdf" onchange="previewUploadKlaim(this)">
                     <div class="upload-placeholder flex flex-col items-center justify-center gap-1 text-slate-500">
                         <i data-lucide="paperclip" class="w-5 h-5 text-primary"></i>
                         <span class="text-xs font-medium">Klik atau seret foto bukti di sini (Foto lama / struk pembelian)</span>
@@ -255,5 +260,21 @@ if (!$item) {
 
     </div>
 </div>
+
+<script>
+function previewUploadKlaim(input) {
+    if (input.files && input.files[0]) {
+        const zone = input.closest('.upload-zone');
+        const placeholder = zone.querySelector('.upload-placeholder');
+        const preview = zone.querySelector('.upload-preview');
+        const fileName = zone.querySelector('.file-name');
+        
+        placeholder.classList.add('hidden');
+        preview.classList.remove('hidden');
+        preview.classList.add('flex');
+        fileName.textContent = input.files[0].name;
+    }
+}
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

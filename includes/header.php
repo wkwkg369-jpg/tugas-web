@@ -1,11 +1,17 @@
 <?php
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/data.php';
+
 if (!isset($page_title)) {
     $page_title = 'SIP-Barang Kampus - Layanan Kehilangan & Temuan Barang';
 }
 if (!isset($current_page)) {
     $current_page = '';
 }
-require_once __DIR__ . '/data.php';
+
+$currentUser = get_logged_in_user();
+$isLoggedIn = ($currentUser !== null);
 ?>
 <!DOCTYPE html>
 <html lang="id" class="h-full bg-slate-50">
@@ -22,7 +28,7 @@ require_once __DIR__ . '/data.php';
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Tailwind CSS (Offline-ready with Local Vendor & CDN Fallback) -->
+    <!-- Tailwind CSS (Offline-ready with Local Vendor) -->
     <script src="assets/vendor/tailwind.js"></script>
     <script>
         tailwind.config = {
@@ -59,6 +65,7 @@ require_once __DIR__ . '/data.php';
                     },
                     boxShadow: {
                         'card': '0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04)',
+                        'modal': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
                     }
                 }
             }

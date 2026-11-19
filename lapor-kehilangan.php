@@ -2,9 +2,105 @@
 $page_title = 'Lapor Kehilangan - SIP-Barang Kampus';
 $current_page = 'lapor';
 require_once __DIR__ . '/includes/header.php';
-require_once __DIR__ . '/includes/navbar.php';
 
 $categories = get_categories();
+$user = get_logged_in_user();
+$errorMessage = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $nama_barang = trim($_POST['nama_barang'] ?? '');
+    $kategori_barang = trim($_POST['kategori_barang'] ?? '');
+    $ciri_umum = trim($_POST['ciri_umum'] ?? '');
+    $ciri_khusus = trim($_POST['ciri_khusus'] ?? '');
+    $lokasi = trim($_POST['lokasi'] ?? '');
+    $waktu_raw = trim($_POST['waktu_kejadian'] ?? '');
+
+    if (empty($nama_barang) || empty($kategori_barang) || empty($ciri_umum) || empty($lokasi)) {
+        $errorMessage = 'Semua kolom bertanda bintang (*) wajib diisi.';
+    } else {
+        // Format waktu
+        $waktuFormatted = !empty($waktu_raw) ? date('d M Y, H:i', strtotime($waktu_raw)) . ' WIB' : date('d M Y, H:i') . ' WIB';
+
+        // Slug kategori
+        $slug = 'lainnya';
+        foreach ($categories as $cat) {
+            if ($cat['name'] === $kategori_barang) {
+                $slug = $cat['slug'];
+                break;
+            }
+        }
+
+        // Handle File Upload
+        $fotoFilename = null;
+        if (isset($_FILES['foto_barang']) && $_FILES['foto_barang']['error'] === UPLOAD_ERR_OK) {
+            $tmpName = $_FILES['foto_barang']['tmp_name'];
+            $origName = basename($_FILES['foto_barang']['name']);
+            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                $fotoFilename = 'lost_' . time() . '_' . random_int(100, 999) . '.' . $ext;
+                $targetPath = __DIR__ . '/assets/uploads/' . $fotoFilename;
+                move_uploaded_file($tmpName, $targetPath);
+            }
+        }
+
+        // Generate unique tracking code
+        $kode = 'TRX-' . random_int(88220, 88999);
+
+        // Icon based on category
+        $iconMap = [
+            'elektronik' => 'smartphone',
+            'dompet' => 'wallet',
+            'kunci' => 'key-round',
+            'tas' => 'backpack',
+            'aksesoris' => 'sparkles',
+            'lainnya' => 'package'
+        ];
+        $icon = $iconMap[$slug] ?? 'package';
+
+        $pelaporId = $user ? $user['id'] : 1;
+        $pelaporNama = $user ? ($user['nama'] . ' (Mahasiswa)') : 'Budi Pratama (Mahasiswa)';
+
+        $sql = "INSERT INTO items (
+            kode, nama, kategori, kategori_slug, status, jenis_laporan, lokasi, lokasi_singkat,
+            waktu_kejadian, deskripsi, ciri_umum, ciri_khusus, tempat_simpan, pelapor_id,
+            pelapor_nama, pelapor_tipe, foto, icon, warna_placeholder
+        ) VALUES (?, ?, ?, ?, 'Hilang', 'kehilangan', ?, ?, ?, ?, ?, ?, 'Dalam pencarian pelapor', ?, ?, 'Mahasiswa', ?, ?, '#fee2e2')";
+
+        $ok = db_execute($sql, [
+            $kode,
+            $nama_barang,
+            $kategori_barang,
+            $slug,
+            $lokasi,
+            $lokasi,
+            $waktuFormatted,
+            $ciri_umum,
+            $ciri_umum,
+            $ciri_khusus,
+            $pelaporId,
+            $pelaporNama,
+            $fotoFilename,
+            $icon
+        ]);
+
+        if ($ok) {
+            // Create user notification
+            db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread) VALUES (?, ?, ?, 'bell', 1)", [
+                $pelaporId,
+                'Laporan Barang Hilang Terkirim!',
+                "Laporan '{$nama_barang}' (#{kode}) telah berhasil didaftarkan dan segera ditinjau oleh petugas keamanan."
+            ]);
+
+            set_flash_message('success', "Laporan barang hilang '{$nama_barang}' berhasil dibuat dengan ID #{$kode}!");
+            header('Location: riwayat.php?tab=laporan');
+            exit;
+        } else {
+            $errorMessage = 'Gagal menyimpan laporan. Silakan periksa kembali data Anda.';
+        }
+    }
+}
+
+require_once __DIR__ . '/includes/navbar.php';
 ?>
 
 <main class="flex-1 py-10">
@@ -30,12 +126,19 @@ $categories = get_categories();
                         Formulir Lapor Barang Hilang
                     </h1>
                     <p class="text-xs sm:text-sm text-slate-500 mt-1 leading-relaxed">
-                        Isi informasi barang Anda dengan akurat untuk mempermudah identifikasi dan verifikasi.
+                        Isi informasi barang Anda dengan akurat untuk mempermudah identifikasi dan verifikasi petugas.
                     </p>
                 </div>
             </div>
 
-            <form action="riwayat.php" method="POST" class="space-y-6">
+            <?php if (!empty($errorMessage)): ?>
+                <div class="mb-5 p-3.5 rounded-btn bg-red-50 border border-red-200 text-xs sm:text-sm text-red-700 flex items-center gap-2.5">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 shrink-0"></i>
+                    <span><?= htmlspecialchars($errorMessage) ?></span>
+                </div>
+            <?php endif; ?>
+
+            <form action="lapor-kehilangan.php" method="POST" enctype="multipart/form-data" class="space-y-6">
                 
                 <!-- 2 Kolom: Nama Barang & Kategori Barang -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -51,6 +154,7 @@ $categories = get_categories();
                                 type="text" 
                                 name="nama_barang" 
                                 required
+                                value="<?= htmlspecialchars($_POST['nama_barang'] ?? '') ?>"
                                 placeholder="Contoh: Dompet Kulit Cokelat" 
                                 class="input-default pl-10"
                             >
@@ -69,7 +173,9 @@ $categories = get_categories();
                                 <option value="" disabled selected>Pilih Kategori Barang</option>
                                 <?php foreach ($categories as $cat): ?>
                                     <?php if ($cat['id'] !== 'all'): ?>
-                                        <option value="<?= htmlspecialchars($cat['name']) ?>"><?= htmlspecialchars($cat['name']) ?></option>
+                                        <option value="<?= htmlspecialchars($cat['name']) ?>" <?= ($_POST['kategori_barang'] ?? '') === $cat['name'] ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($cat['name']) ?>
+                                        </option>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
                             </select>
@@ -88,7 +194,7 @@ $categories = get_categories();
                         required
                         placeholder="Dompet kulit merk Bogesi warna cokelat tua dengan jahitan benang putih..." 
                         class="input-default text-sm"
-                    ></textarea>
+                    ><?= htmlspecialchars($_POST['ciri_umum'] ?? '') ?></textarea>
                     <p class="text-[11px] text-slate-400 mt-1">Ciri fisik yang bisa dilihat siapa saja untuk mengenali barang Anda.</p>
                 </div>
 
@@ -109,7 +215,7 @@ $categories = get_categories();
                         required
                         placeholder="Di dalam slot tersembunyi ada struk ATM BNI & foto polaroid keluarga..." 
                         class="input-default text-sm border-amber-200 focus:border-amber-400 focus:ring-amber-200"
-                    ></textarea>
+                    ><?= htmlspecialchars($_POST['ciri_khusus'] ?? '') ?></textarea>
                     <p class="text-[11px] text-slate-400 mt-1">Hanya akan dilihat oleh admin/petugas saat proses verifikasi klaim barang.</p>
                 </div>
 
@@ -127,6 +233,7 @@ $categories = get_categories();
                                 type="text" 
                                 name="lokasi" 
                                 required
+                                value="<?= htmlspecialchars($_POST['lokasi'] ?? '') ?>"
                                 placeholder="Perpustakaan Pusat Lantai 2" 
                                 class="input-default pl-10"
                             >
@@ -145,6 +252,7 @@ $categories = get_categories();
                                 type="datetime-local" 
                                 name="waktu_kejadian" 
                                 required
+                                value="<?= htmlspecialchars($_POST['waktu_kejadian'] ?? date('Y-m-d\TH:i')) ?>"
                                 class="input-default pl-10 text-slate-700"
                             >
                         </div>
@@ -156,14 +264,14 @@ $categories = get_categories();
                     <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1.5">
                         Upload Foto Barang (Opsional)
                     </label>
-                    <div class="upload-zone p-6 text-center rounded-btn bg-slate-50 border-2 border-dashed border-slate-200 hover:border-primary transition-colors">
-                        <input type="file" name="foto_barang" class="hidden" accept="image/*">
+                    <div class="upload-zone p-6 text-center rounded-btn bg-slate-50 border-2 border-dashed border-slate-200 hover:border-primary transition-colors cursor-pointer" onclick="this.querySelector('input').click()">
+                        <input type="file" name="foto_barang" class="hidden" accept="image/*" onchange="previewUpload(this)">
                         <div class="upload-placeholder flex flex-col items-center justify-center gap-1.5 text-slate-500">
                             <div class="w-10 h-10 rounded-full bg-blue-50 text-primary flex items-center justify-center mb-1">
                                 <i data-lucide="upload-cloud" class="w-5 h-5"></i>
                             </div>
                             <span class="text-xs md:text-sm font-medium">Tarik & lepas file foto di sini, atau <span class="text-primary underline">klik untuk memilih file</span></span>
-                            <span class="text-[11px] text-slate-400">Format JPG, PNG maks 5MB</span>
+                            <span class="text-[11px] text-slate-400">Format JPG, PNG, WEBP maks 5MB</span>
                         </div>
                         <div class="upload-preview hidden flex-col items-center justify-center gap-1 text-emerald-600">
                             <i data-lucide="check-circle" class="w-6 h-6"></i>
@@ -186,5 +294,21 @@ $categories = get_categories();
 
     </div>
 </main>
+
+<script>
+function previewUpload(input) {
+    if (input.files && input.files[0]) {
+        const zone = input.closest('.upload-zone');
+        const placeholder = zone.querySelector('.upload-placeholder');
+        const preview = zone.querySelector('.upload-preview');
+        const fileName = zone.querySelector('.file-name');
+        
+        placeholder.classList.add('hidden');
+        preview.classList.remove('hidden');
+        preview.classList.add('flex');
+        fileName.textContent = input.files[0].name;
+    }
+}
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

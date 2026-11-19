@@ -2,6 +2,34 @@
 $page_title = 'Masuk ke Akun - SIP-Barang Kampus';
 $current_page = 'masuk';
 require_once __DIR__ . '/includes/header.php';
+
+// If already logged in, redirect
+if (is_logged_in()) {
+    header('Location: index.php');
+    exit;
+}
+
+$errorMessage = '';
+$inputIdentifier = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $inputIdentifier = trim($_POST['username'] ?? '');
+    $password = $_POST['password'] ?? '';
+
+    $res = login_user($inputIdentifier, $password);
+    if ($res['success']) {
+        set_flash_message('success', 'Selamat datang kembali, ' . htmlspecialchars($res['user']['nama']) . '!');
+        if ($res['user']['role'] === 'admin' || $res['user']['role'] === 'petugas') {
+            header('Location: admin/index.php');
+        } else {
+            header('Location: index.php');
+        }
+        exit;
+    } else {
+        $errorMessage = $res['message'];
+    }
+}
+
 require_once __DIR__ . '/includes/navbar.php';
 ?>
 
@@ -37,7 +65,7 @@ require_once __DIR__ . '/includes/navbar.php';
             <div class="lg:col-span-7 max-w-[600px] mx-auto w-full">
                 <div class="card-default p-8 sm:p-10 rounded-card bg-white border border-slate-200 shadow-sm">
                     
-                    <div class="mb-8">
+                    <div class="mb-6">
                         <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
                             Masuk ke Akunmu
                         </h1>
@@ -46,7 +74,14 @@ require_once __DIR__ . '/includes/navbar.php';
                         </p>
                     </div>
 
-                    <form action="index.php" method="POST" class="space-y-5">
+                    <?php if (!empty($errorMessage)): ?>
+                        <div class="mb-5 p-3.5 rounded-btn bg-red-50 border border-red-200 text-xs sm:text-sm text-red-700 flex items-center gap-2.5">
+                            <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 shrink-0"></i>
+                            <span><?= htmlspecialchars($errorMessage) ?></span>
+                        </div>
+                    <?php endif; ?>
+
+                    <form action="masuk.php" method="POST" class="space-y-4">
                         
                         <!-- Input User (Email / NIM) -->
                         <div>
@@ -60,7 +95,9 @@ require_once __DIR__ . '/includes/navbar.php';
                                 <input 
                                     type="text" 
                                     name="username" 
+                                    id="loginUsername"
                                     required
+                                    value="<?= htmlspecialchars($inputIdentifier) ?>"
                                     placeholder="nama@ui.ac.id atau 2024080123" 
                                     class="input-default pl-10"
                                 >
@@ -79,6 +116,7 @@ require_once __DIR__ . '/includes/navbar.php';
                                 <input 
                                     type="password" 
                                     name="password" 
+                                    id="loginPassword"
                                     required
                                     placeholder="••••••••••••" 
                                     class="input-default pl-10 pr-10"
@@ -108,6 +146,22 @@ require_once __DIR__ . '/includes/navbar.php';
                             </button>
                         </div>
 
+                        <!-- Quick Demo Credentials Box -->
+                        <div class="p-3 bg-slate-50 rounded-btn border border-slate-200/80 text-xs text-slate-600">
+                            <span class="font-bold text-slate-800 block mb-1.5 flex items-center gap-1.5">
+                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-primary"></i>
+                                <span>Akun Demo Cepat (Klik untuk mengisi):</span>
+                            </span>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" onclick="fillDemo('budi.pratama@ui.ac.id', 'password123')" class="px-2.5 py-1 rounded bg-white border border-slate-200 hover:border-primary text-slate-700 hover:text-primary font-medium transition-colors">
+                                    👨‍🎓 Mahasiswa (Budi)
+                                </button>
+                                <button type="button" onclick="fillDemo('admin@ui.ac.id', 'admin123')" class="px-2.5 py-1 rounded bg-white border border-slate-200 hover:border-blue-600 text-slate-700 hover:text-blue-600 font-medium transition-colors">
+                                    👮‍♂️ Petugas / Admin
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Register Redirect Link -->
                         <div class="text-center pt-2 text-xs sm:text-sm text-slate-500">
                             Belum punya akun? 
@@ -125,5 +179,12 @@ require_once __DIR__ . '/includes/navbar.php';
 
     </div>
 </main>
+
+<script>
+function fillDemo(user, pass) {
+    document.getElementById('loginUsername').value = user;
+    document.getElementById('loginPassword').value = pass;
+}
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

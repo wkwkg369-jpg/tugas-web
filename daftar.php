@@ -2,6 +2,20 @@
 $page_title = 'Daftar Akun Mahasiswa - SIP-Barang Kampus';
 $current_page = 'daftar';
 require_once __DIR__ . '/includes/header.php';
+
+$errorMessage = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $res = register_user($_POST);
+    if ($res['success']) {
+        set_flash_message('success', 'Kode OTP pendaftaran Anda telah dibuat: ' . $res['otp']);
+        header('Location: verifikasi-otp.php?email=' . urlencode($_POST['email']));
+        exit;
+    } else {
+        $errorMessage = $res['message'];
+    }
+}
+
 require_once __DIR__ . '/includes/navbar.php';
 ?>
 
@@ -46,7 +60,14 @@ require_once __DIR__ . '/includes/navbar.php';
                         </p>
                     </div>
 
-                    <form action="verifikasi-otp.php" method="POST" class="space-y-4">
+                    <?php if (!empty($errorMessage)): ?>
+                        <div class="mb-5 p-3.5 rounded-btn bg-red-50 border border-red-200 text-xs sm:text-sm text-red-700 flex items-center gap-2.5">
+                            <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 shrink-0"></i>
+                            <span><?= htmlspecialchars($errorMessage) ?></span>
+                        </div>
+                    <?php endif; ?>
+
+                    <form action="daftar.php" method="POST" class="space-y-4">
                         
                         <!-- 2 Kolom: Nama Lengkap & NIM -->
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -62,6 +83,7 @@ require_once __DIR__ . '/includes/navbar.php';
                                         type="text" 
                                         name="nama" 
                                         required
+                                        value="<?= htmlspecialchars($_POST['nama'] ?? '') ?>"
                                         placeholder="Budi Pratama" 
                                         class="input-default pl-10"
                                     >
@@ -80,6 +102,7 @@ require_once __DIR__ . '/includes/navbar.php';
                                         type="text" 
                                         name="nim" 
                                         required
+                                        value="<?= htmlspecialchars($_POST['nim'] ?? '') ?>"
                                         placeholder="2024080123" 
                                         class="input-default pl-10"
                                     >
@@ -97,13 +120,13 @@ require_once __DIR__ . '/includes/navbar.php';
                                     <i data-lucide="graduation-cap" class="w-4 h-4"></i>
                                 </div>
                                 <select name="prodi" required class="input-default pl-10 text-slate-700 bg-white">
-                                    <option value="" disabled selected>Pilih Program Studi & Fakultas</option>
-                                    <option value="Sistem Informasi - Fakultas Ilmu Komputer">Sistem Informasi - Fakultas Ilmu Komputer</option>
-                                    <option value="Ilmu Komputer - Fakultas Ilmu Komputer">Ilmu Komputer - Fakultas Ilmu Komputer</option>
-                                    <option value="Teknik Elektro - Fakultas Teknik">Teknik Elektro - Fakultas Teknik</option>
-                                    <option value="Teknik Industri - Fakultas Teknik">Teknik Industri - Fakultas Teknik</option>
-                                    <option value="Manajemen - Fakultas Ekonomi & Bisnis">Manajemen - Fakultas Ekonomi & Bisnis</option>
-                                    <option value="Ilmu Hukum - Fakultas Hukum">Ilmu Hukum - Fakultas Hukum</option>
+                                    <option value="" disabled <?= empty($_POST['prodi']) ? 'selected' : '' ?>>Pilih Program Studi & Fakultas</option>
+                                    <option value="Sistem Informasi - Fakultas Ilmu Komputer" <?= ($_POST['prodi'] ?? '') === 'Sistem Informasi - Fakultas Ilmu Komputer' ? 'selected' : '' ?>>Sistem Informasi - Fakultas Ilmu Komputer</option>
+                                    <option value="Ilmu Komputer - Fakultas Ilmu Komputer" <?= ($_POST['prodi'] ?? '') === 'Ilmu Komputer - Fakultas Ilmu Komputer' ? 'selected' : '' ?>>Ilmu Komputer - Fakultas Ilmu Komputer</option>
+                                    <option value="Teknik Elektro - Fakultas Teknik" <?= ($_POST['prodi'] ?? '') === 'Teknik Elektro - Fakultas Teknik' ? 'selected' : '' ?>>Teknik Elektro - Fakultas Teknik</option>
+                                    <option value="Teknik Industri - Fakultas Teknik" <?= ($_POST['prodi'] ?? '') === 'Teknik Industri - Fakultas Teknik' ? 'selected' : '' ?>>Teknik Industri - Fakultas Teknik</option>
+                                    <option value="Manajemen - Fakultas Ekonomi & Bisnis" <?= ($_POST['prodi'] ?? '') === 'Manajemen - Fakultas Ekonomi & Bisnis' ? 'selected' : '' ?>>Manajemen - Fakultas Ekonomi & Bisnis</option>
+                                    <option value="Ilmu Hukum - Fakultas Hukum" <?= ($_POST['prodi'] ?? '') === 'Ilmu Hukum - Fakultas Hukum' ? 'selected' : '' ?>>Ilmu Hukum - Fakultas Hukum</option>
                                 </select>
                             </div>
                         </div>
@@ -121,6 +144,7 @@ require_once __DIR__ . '/includes/navbar.php';
                                     type="email" 
                                     name="email" 
                                     required
+                                    value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
                                     placeholder="budi.pratama@ui.ac.id" 
                                     class="input-default pl-10"
                                 >
@@ -140,6 +164,7 @@ require_once __DIR__ . '/includes/navbar.php';
                                     type="tel" 
                                     name="phone" 
                                     required
+                                    value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>"
                                     placeholder="081234567890" 
                                     class="input-default pl-10"
                                 >
@@ -168,7 +193,7 @@ require_once __DIR__ . '/includes/navbar.php';
                             </div>
                         </div>
 
-                        <!-- Submit Button (Tombol Daftar 520x46) -->
+                        <!-- Submit Button -->
                         <div class="pt-3">
                             <button type="submit" class="w-full btn-primary h-12 rounded-btn text-base font-semibold shadow-sm flex items-center justify-center gap-2">
                                 <span>Daftar Akun Sekarang</span>

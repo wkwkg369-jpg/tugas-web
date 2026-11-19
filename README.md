@@ -1,84 +1,133 @@
 # SIP-Barang Kampus (Sistem Informasi Pelaporan & Pencarian Barang Hilang)
 
-Frontend antarmuka web untuk pelaporan kehilangan dan pencarian barang di lingkungan kampus. Dibuat menggunakan **PHP** murni, terstruktur rapi, modular, dan siap dihubungkan ke backend/database (MySQL/PDO).
+Aplikasi web fullstack Lost and Found untuk lingkungan kampus yang modern, aman, dan responsif. Didesain 100% mengikuti **Figma Design System** (`ui/desgin sistem` dan `ui/design halaman mahasiswa`), dilengkapi arsitektur backend PHP modular, sistem autentikasi, manajemen session, pelaporan interaktif dengan upload gambar, proses klaim berjenjang, dan portal verifikasi admin/petugas keamanan.
 
-Desain disesuaikan 100% dengan Figma Design System di folder `ui/design halaman mahasiswa`.
+---
+
+## 🌟 Fitur Utama Sistem
+
+### 1. Sisi Mahasiswa (Publik & Civitas Akademika)
+- **Beranda (`index.php`)**: Hero search cepat, tombol aksi lapor hilang/temuan, katalog barang terbaru dilaporkan, dan 4 langkah alur sistem.
+- **Pencarian Katalog (`pencarian.php`)**: Real-time search by keyword, filter kategori barang, filter status laporan, filter lokasi kampus, dan sorting terbaru.
+- **Detail Barang (`detail.php`)**: Foto/ikon barang, metadata waktu & lokasi, identitas pelapor terverifikasi, ciri umum barang, tempat penyimpanan fisik barang, peringatan keamanan akademik, dan pemicu klaim barang.
+- **Pengajuan Klaim Kepemilikan (`modal-klaim.php` & `klaim-berhasil.php`)**: Modal popup untuk menjawab pertanyaan ciri rahasia, upload bukti pendukung (struk/foto lama), generate ID klaim otomatis (`#KLM-2026-XXXX`), dan status verifikasi langsung.
+- **Lapor Kehilangan (`lapor-kehilangan.php`)**: Form pelaporan barang hilang dilengkapi ciri umum (publik), ciri khusus rahasia (private/admin only), lokasi terakhir, tanggal kejadian, dan upload foto barang (`assets/uploads/`).
+- **Lapor Temuan (`lapor-temuan.php`)**: Form pelaporan barang temuan civitas kampus, kategori barang, upload foto, lokasi penemuan, dan pilihan lokasi penitipan pos keamanan.
+- **Riwayat Pelaporan & Klaim (`riwayat.php`)**: Tab interaktif "Laporan Saya" dan "Klaim Saya", nomor antrean transaksi, status badge warna resmi, dan link langsung ke detail.
+- **Pusat Notifikasi (`notifikasi.php`)**: Riwayat notifikasi status pelaporan dan verifikasi klaim secara real-time, badge unread di navbar, dan fitur "Tandai semua dibaca".
+- **Autentikasi & Akun**:
+  - Masuk (`masuk.php`): Login dengan email kampus / NIM dan password, remember me, show/hide password, dan tombol shortcut Akun Demo 1-klik.
+  - Daftar (`daftar.php`): Registrasi mahasiswa baru (Nama, NIM, Program Studi, Email Kampus, WhatsApp, Password).
+  - Verifikasi OTP (`verifikasi-otp.php`): Input 6-digit OTP interaktif, countdown timer, dan state switcher desain Figma (Default, Salah, Berhasil).
+  - Lupa Sandi (`lupa-sandi.php`): Reset kata sandi melalui kode OTP.
+  - Keluar (`keluar.php`): Logout aman dan pembersihan session.
+
+### 2. Sisi Admin & Petugas Keamanan (`/admin/`)
+- **Dashboard Utama (`admin/index.php`)**: Metrik real-time (Total Hilang, Ditemukan, Dalam Verifikasi, Selesai Dikembalikan), visualisasi grafik per bulan, dan antrean "Perlu Diproses Segera".
+- **Verifikasi Laporan (`admin/verifikasi-laporan.php`)**: Tinjau laporan masuk, validasi keaslian, setujui/publikasikan ke katalog, atau tolak/tutup laporan palsu.
+- **Verifikasi Klaim Kepemilikan (`admin/verifikasi-klaim.php`)**: Tampilan perbandingan berdampingan (*side-by-side*) antara data rahasia penemu vs jawaban & bukti struk/foto pengklaim, serta form keputusan petugas.
+- **Catat Penyerahan Barang (`admin/catat-penyerahan.php`)**: Pencatatan resmi serah terima barang kepada pemilik sah lengkap dengan nomor Berita Acara (`#BA-YYYYMMDD-XXX`) yang siap dicetak.
+- **Kelola Seluruh Laporan (`admin/kelola-laporan.php`)**: Master tabel inventaris, pencarian cepat, filter multi-kriteria, pengubahan status cepat, dan hapus laporan.
+- **Rekap & Arsip Laporan (`admin/rekap-laporan.php`)**: Statistik distribusi kategori, tingkat keberhasilan pengembalian barang (*return rate*), dan tombol cetak laporan resmi / ekspor PDF.
+
+---
+
+## 🗄️ Arsitektur Database (Dual-Engine XAMPP)
+
+Aplikasi dilengkapi modul database pintar di `includes/db.php`:
+1. **Engine Utama: MySQL / MariaDB (XAMPP)**
+   - Host: `127.0.0.1:3306`
+   - User: `root`, Password: `(kosong)`
+   - Nama Database: `sip_barang_kampus`
+   - Skrip SQL lengkap tersedia di file: [sip_barang_kampus.sql](file:///D:/project-RPL/tugas-web/sip_barang_kampus.sql).
+2. **Engine Fallback Otomatis: SQLite (`includes/sip_barang.sqlite`)**
+   - Jika MySQL belum dinyalakan di XAMPP Control Panel, sistem otomatis beralih ke SQLite lokal secara *seamless*.
+   - **Menjamin web 100% langsung berjalan tanpa error 500 walau MySQL belum di-start!**
+
+### Tabel Database:
+- `users`: Data pengguna (id, nama, nim, prodi, email, phone, password, role ['mahasiswa', 'admin']).
+- `categories`: Kategori barang dan ikon.
+- `locations`: Daftar titik lokasi kampus.
+- `items`: Master data laporan barang hilang dan temuan (termasuk ciri khusus private).
+- `claims`: Pengajuan klaim kepemilikan oleh mahasiswa.
+- `notifications`: Notifikasi aktivitas untuk pengguna.
+- `otp_codes`: Kode OTP untuk registrasi dan lupa kata sandi.
+
+---
+
+## 🔑 Akun Demo Siap Pakai
+
+Tersedia akun bawaan untuk kemudahan pengujian:
+
+| Peran (Role) | Email / NIM | Kata Sandi | Akses |
+|---|---|---|---|
+| **Mahasiswa** | `budi.pratama@ui.ac.id` atau `2024080123` | `password123` | Halaman Mahasiswa, Lapor, Klaim, Riwayat, Notifikasi |
+| **Admin / Petugas** | `admin@ui.ac.id` | `admin123` | Dashboard Admin, Verifikasi Laporan, Verifikasi Klaim, Penyerahan, Rekap |
+
+> 💡 *Pada halaman `masuk.php` juga telah disediakan tombol "Akun Demo Cepat" untuk mengisi form hanya dengan 1 kali klik.*
 
 ---
 
 ## 🚀 Cara Menjalankan Project
 
-### Opsi 1: Klik Langsung (Windows / Laragon / XAMPP)
-Cukup klik ganda file **`serve.bat`**. Skrip ini akan otomatis mendeteksi PHP dan membuka web di browser (`http://localhost:8000`).
+### Cara 1: Menggunakan Script Cepat (Rekomendasi)
+1. Buka folder `tugas-web`.
+2. Klik ganda file [serve.bat](file:///D:/project-RPL/tugas-web/serve.bat).
+3. Browser akan otomatis terbuka ke `http://localhost:8000`.
 
-### Opsi 2: Menggunakan Terminal / Command Prompt
-Buka terminal di folder project ini dan jalankan:
-```bash
-# Menggunakan Laragon PHP:
-C:\laragon\bin\php\php-8.3.36-Win32-vs16-x64\php.exe -S localhost:8000
+### Cara 2: Menggunakan Apache XAMPP (`htdocs`)
+1. Salin folder `tugas-web` ke `C:\xampp\htdocs\tugas-web`.
+2. Buka **XAMPP Control Panel**, klik **Start** pada modul **Apache** dan **MySQL**.
+3. (Opsional) Buka `http://localhost/phpmyadmin`, buat database `sip_barang_kampus`, lalu import [sip_barang_kampus.sql](file:///D:/project-RPL/tugas-web/sip_barang_kampus.sql).
+4. Akses melalui browser: `http://localhost/tugas-web/`
 
-# Atau jika PHP sudah terdaftar di PATH / XAMPP:
-php -S localhost:8000
+---
+
+## 📂 Struktur Direktori Proyek
+
 ```
-Buka browser ke [http://localhost:8000](http://localhost:8000).
-
----
-
-## 📁 Struktur File & Mapping ke Desain Figma
-
-| Halaman Figma | File PHP | Deskripsi Fitur |
-|---|---|---|
-| **Mahasiswa / Beranda** | [index.php](file:///c:/Project/Sip-web%20kerkom/index.php) | Hero banner, search bar cepat, tombol CTA lapor hilang & temu, kartu 6 barang terbaru dilaporkan, dan 4 langkah cara kerja sistem. |
-| **Mahasiswa / Pencarian Barang** | [pencarian.php](file:///c:/Project/Sip-web%20kerkom/pencarian.php) | Katalog barang hilang & temuan, search bar real-time, panel filter status laporan, kategori, dropdown lokasi kampus, filter tanggal kejadian, dan paginasi. |
-| **Mahasiswa / Detail Barang** | [detail.php](file:///c:/Project/Sip-web%20kerkom/detail.php) | Galeri foto, kartu info pelapor terverifikasi, peringatan keamanan klaim palsu, detail spesifikasi barang, tempat penyimpanan pos keamanan, dan pemicu klaim barang. |
-| **Mahasiswa / Modal Klaim** | [modal-klaim.php](file:///c:/Project/Sip-web%20kerkom/modal-klaim.php) | Modal popup pengajuan bukti kepemilikan, pertanyaan verifikasi ciri khusus, upload dokumen/foto pendukung. (Juga terintegrasi interaktif di `detail.php`). |
-| **Mahasiswa / Klaim Berhasil** | [klaim-berhasil.php](file:///c:/Project/Sip-web%20kerkom/klaim-berhasil.php) | Konfirmasi pengajuan klaim sukses, ringkasan ID klaim (#KLM-2026-8821), status verifikasi, dan tombol pantau status riwayat. |
-| **Mahasiswa / Lapor Kehilangan** | [lapor-kehilangan.php](file:///c:/Project/Sip-web%20kerkom/lapor-kehilangan.php) | Formulir lapor kehilangan: nama barang, kategori, ciri umum (publik), ciri khusus rahasia (private/admin only), lokasi terakhir, tanggal & waktu, dan upload foto barang. |
-| **Mahasiswa / Lapor Temuan** | [lapor-temuan.php](file:///c:/Project/Sip-web%20kerkom/lapor-temuan.php) | Formulir lapor temuan: kategori barang, upload foto temuan, lokasi penemuan, tanggal & waktu, dan tempat penyimpanan barang saat ini (pos satpam/disimpan sendiri). |
-| **Mahasiswa / Riwayat Saya** | [riwayat.php](file:///c:/Project/Sip-web%20kerkom/riwayat.php) | Tab interaktif "Laporan Saya (3)" dan "Klaim Saya (1)", tabel data riwayat, status badge warna-warni, dan tombol detail. |
-| **Mahasiswa / Notifikasi** | [notifikasi.php](file:///c:/Project/Sip-web%20kerkom/notifikasi.php) | Pusat notifikasi aktivitas pelaporan dan klaim dengan badge status belum dibaca (unread dot), waktu relatif, dan ikon penanda. |
-| **Mahasiswa / Masuk** | [masuk.php](file:///c:/Project/Sip-web%20kerkom/masuk.php) | Halaman login dengan layout split 2 kolom (ilustrasi kampus + kartu form masuk), show/hide kata sandi, remember me, link lupa sandi dan daftar. |
-| **Mahasiswa / Masuk dan Daftar** | [daftar.php](file:///c:/Project/Sip-web%20kerkom/daftar.php) | Formulir registrasi mahasiswa: Nama lengkap, NIM, dropdown program studi & fakultas, email kampus, nomor WhatsApp, kata sandi. |
-| **Mahasiswa / Lupa Kata Sandi** | [lupa-sandi.php](file:///c:/Project/Sip-web%20kerkom/lupa-sandi.php) | Halaman reset kata sandi dengan input email kampus dan tombol kirim kode OTP. |
-| **Mahasiswa / Verifikasi OTP** | [verifikasi-otp.php](file:///c:/Project/Sip-web%20kerkom/verifikasi-otp.php) | Input 6 digit OTP interaktif (auto-focus, paste, backspace, hitung mundur kirim ulang). Tersedia state switcher untuk melihat state: Normal (`?state=default`), Salah (`?state=salah`), dan Berhasil (`?state=berhasil`). |
-
----
-
-## 🎨 Asset & Komponen Desain
-
-- **`includes/header.php`**: Header HTML bersama, memuat font Inter, konfigurasi Tailwind, CSS kustom, dan library ikon Lucide.
-- **`includes/navbar.php`**: Navigasi atas dengan menu aktif, badge notifikasi (angka 2 merah), tombol Masuk / Profil, dan mobile menu.
-- **`includes/footer.php`**: Footer kampus, copyright, dan toast notifikasi global (`#toastNotification`).
-- **`includes/data.php`**: Kumpulan fungsi mock data array (`get_mock_items()`, `get_categories()`, `get_locations()`, `get_mock_notifications()`, `render_status_badge()`).
-- **`assets/css/style.css`**: Design tokens resmi (warna primary `#2563eb`, status colors, border radius 10px & 16px, custom shadow, input/button styles).
-- **`assets/js/main.js`**: Logika interaktif frontend (live filter pencarian, tab riwayat, toggle modal klaim, toast notification, input OTP, drag-and-drop upload preview).
-- **`assets/vendor/`**: Berisi file `tailwind.js` dan `lucide.min.js` lokal sehingga aplikasi dapat berjalan 100% tanpa internet / offline.
-
----
-
-## 🛠️ Panduan untuk Rekan Pengembang Backend
-
-Struktur ini sudah disiapkan agar sangat mudah diintegrasikan dengan database MySQL / PostgreSQL dan session PHP:
-
-1. **Mengganti Mock Data ke Database**:
-   - Buka [includes/data.php](file:///c:/Project/Sip-web%20kerkom/includes/data.php).
-   - Di sini fungsi seperti `get_mock_items()` mengembalikan array data. Rekan backend dapat membuat koneksi database (misal `includes/db.php`) dan mengganti return array dengan query `PDO::fetchAll()`.
-
-2. **Form Submission Endpoints**:
-   - Semua form telah memiliki atribut `action="..."`, `method="POST"`, serta `name="..."` pada setiap input field yang semantik dan terstandarisasi.
-   - Misalnya di [lapor-kehilangan.php](file:///c:/Project/Sip-web%20kerkom/lapor-kehilangan.php):
-     - `nama_barang` (text)
-     - `kategori_barang` (select)
-     - `ciri_umum` (textarea - public)
-     - `ciri_khusus` (textarea - private/secret proof)
-     - `lokasi` (text)
-     - `waktu_kejadian` (datetime-local)
-     - `foto_barang` (file)
-
-3. **Status Laporan Badge**:
-   - Fungsi `render_status_badge($status)` di [includes/data.php](file:///c:/Project/Sip-web%20kerkom/includes/data.php) secara otomatis mewarnai badge sesuai status dari database:
-     - `Hilang`: Merah
-     - `Ditemukan`: Hijau
-     - `Dalam Verifikasi`: Kuning
-     - `Dikembalikan`: Indigo
-     - `Ditutup`: Abu-abu
+tugas-web/
+├── admin/                     # Portal Admin & Petugas Keamanan
+│   ├── includes/
+│   │   ├── admin_header.php
+│   │   ├── admin_sidebar.php
+│   │   └── admin_footer.php
+│   ├── index.php              # Dashboard Admin & Metrik
+│   ├── verifikasi-laporan.php # Verifikasi laporan masuk
+│   ├── verifikasi-klaim.php   # Side-by-side validasi klaim & bukti
+│   ├── catat-penyerahan.php   # Berita acara serah terima barang
+│   ├── kelola-laporan.php     # Manajemen inventaris seluruh barang
+│   └── rekap-laporan.php      # Laporan statistik & cetak arsip
+├── assets/
+│   ├── css/style.css          # Design system tokens, warna & komponen
+│   ├── js/main.js             # Skrip interaksi (filter, modal, OTP, upload)
+│   ├── uploads/               # Direktori penyimpanan file foto barang & bukti klaim
+│   └── vendor/
+│       ├── tailwind.js        # Tailwind CSS lokal (100% offline-ready)
+│       └── lucide.min.js      # Lucide Icons lokal
+├── includes/
+│   ├── auth.php               # Manajemen session, login, register, role check
+│   ├── data.php               # Data helper functions & query wrapper
+│   ├── db.php                 # Dual-driver database (MySQL XAMPP + SQLite fallback)
+│   ├── header.php             # Header global mahasiswa
+│   ├── navbar.php             # Navigasi atas responsif & status login dinamis
+│   └── footer.php             # Footer global & toast notifikasi
+├── sessions/                  # Direktori session lokal yang aman
+├── ui/                        # Desain Figma & Design System
+├── daftar.php                 # Form pendaftaran akun mahasiswa
+├── detail.php                 # Halaman detail barang & pemicu klaim
+├── index.php                  # Halaman beranda utama
+├── keluar.php                 # Logout handler
+├── klaim-berhasil.php         # Konfirmasi klaim diajukan
+├── lapor-kehilangan.php       # Form lapor barang hilang (dengan upload foto)
+├── lapor-temuan.php           # Form lapor barang temuan
+├── lupa-sandi.php             # Reset kata sandi
+├── masuk.php                  # Halaman login mahasiswa & admin
+├── modal-klaim.php            # Standalone modal preview klaim barang
+├── notifikasi.php             # Pusat notifikasi pengguna
+├── pencarian.php              # Katalog & pencarian barang
+├── riwayat.php                # Tab riwayat laporan & klaim saya
+├── serve.bat                  # Skrip 1-klik menjalankan PHP server XAMPP
+├── sip_barang_kampus.sql      # Skema database MySQL & data awal
+└── verifikasi-otp.php         # Halaman verifikasi kode OTP
+```

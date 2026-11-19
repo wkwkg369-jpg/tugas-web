@@ -4,9 +4,7 @@ $current_page = 'beranda';
 require_once __DIR__ . '/includes/header.php';
 require_once __DIR__ . '/includes/navbar.php';
 
-$allItems = get_mock_items();
-// Take first 6 for home page
-$recentItems = array_slice($allItems, 0, 6);
+$recentItems = get_items(['limit' => 6]);
 ?>
 
 <main class="flex-1 pb-16">
@@ -70,11 +68,16 @@ $recentItems = array_slice($allItems, 0, 6);
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <?php foreach ($recentItems as $item): ?>
                 <div class="card-default card-hover rounded-card overflow-hidden flex flex-col group border border-slate-200">
-                    <!-- Photo Placeholder with subtle icon matching Figma -->
+                    <!-- Photo / Icon Placeholder matching Figma -->
                     <a href="detail.php?id=<?= $item['id'] ?>" class="h-44 bg-slate-100 flex items-center justify-center relative overflow-hidden group-hover:opacity-95 transition-opacity">
-                        <div class="w-16 h-16 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-slate-400 group-hover:scale-105 transition-transform">
-                            <i data-lucide="<?= htmlspecialchars($item['icon']) ?>" class="w-8 h-8"></i>
-                        </div>
+                        <?php if (!empty($item['foto']) && file_exists(__DIR__ . '/assets/uploads/' . $item['foto'])): ?>
+                            <img src="assets/uploads/<?= htmlspecialchars($item['foto']) ?>" alt="<?= htmlspecialchars($item['nama']) ?>" class="w-full h-full object-cover">
+                        <?php else: ?>
+                            <div class="w-16 h-16 rounded-full bg-white/80 shadow-sm flex items-center justify-center text-slate-400 group-hover:scale-105 transition-transform">
+                                <i data-lucide="<?= htmlspecialchars($item['icon']) ?>" class="w-8 h-8"></i>
+                            </div>
+                        <?php endif; ?>
+                        
                         <!-- Status Badge Top Right -->
                         <div class="absolute top-3 right-3">
                             <?= render_status_badge($item['status']) ?>
@@ -103,10 +106,10 @@ $recentItems = array_slice($allItems, 0, 6);
                             </div>
                         </div>
 
-                        <div class="mt-4 pt-3">
-                            <a href="detail.php?id=<?= $item['id'] ?>" class="w-full btn-secondary py-2 text-xs font-semibold rounded-btn">
+                        <div class="mt-5">
+                            <a href="detail.php?id=<?= $item['id'] ?>" class="w-full btn-soft-primary h-10 rounded-btn text-sm font-semibold flex items-center justify-center gap-2 group-hover:bg-primary group-hover:text-white transition-all">
                                 <span>Lihat Detail</span>
-                                <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
                             </a>
                         </div>
                     </div>
@@ -115,57 +118,56 @@ $recentItems = array_slice($allItems, 0, 6);
         </div>
     </section>
 
-    <!-- Section: Cara Kerja Sistem -->
+    <!-- Section: 4 Langkah Alur Sistem (Figma: Alur Layanan) -->
     <section class="py-12 bg-white border-y border-slate-200">
         <div class="max-w-[1200px] mx-auto px-4 sm:px-6">
-            <div class="text-center mb-10">
-                <h2 class="text-2xl font-bold text-slate-900 tracking-tight">Cara Kerja Sistem</h2>
-                <p class="text-sm text-slate-500 mt-1">4 langkah mudah mengamankan dan mengembalikan barang hilang di kampus</p>
+            <div class="text-center max-w-xl mx-auto mb-12">
+                <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">Bagaimana Cara Kerjanya?</h2>
+                <p class="text-sm text-slate-500 mt-2">Empat langkah mudah untuk menemukan dan mengembalikan barang di kampus</p>
             </div>
 
-            <!-- 4 Step Cards -->
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <!-- Langkah 1 -->
-                <div class="p-6 rounded-card border border-slate-200 bg-slate-50/50 hover:bg-white hover:shadow-card transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 text-primary flex items-center justify-center mb-4">
-                        <i data-lucide="file-text" class="w-6 h-6"></i>
+                <!-- Step 1 -->
+                <div class="p-6 rounded-card bg-slate-50 border border-slate-100 text-center flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-100 text-primary flex items-center justify-center font-bold text-lg mb-4">
+                        1
                     </div>
-                    <h3 class="text-base font-bold text-primary">1. Lapor</h3>
-                    <p class="mt-2 text-xs md:text-sm text-slate-500 leading-relaxed">
-                        Laporkan barang hilang atau temuan Anda dengan mengisi formulir lengkap.
+                    <h3 class="font-bold text-slate-900 text-base">Laporkan Barang</h3>
+                    <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                        Buat laporan kehilangan atau temuan dengan mengisi deskripsi dan ciri barang secara rinci.
                     </p>
                 </div>
 
-                <!-- Langkah 2 -->
-                <div class="p-6 rounded-card border border-slate-200 bg-slate-50/50 hover:bg-white hover:shadow-card transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 text-primary flex items-center justify-center mb-4">
-                        <i data-lucide="search" class="w-6 h-6"></i>
+                <!-- Step 2 -->
+                <div class="p-6 rounded-card bg-slate-50 border border-slate-100 text-center flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-100 text-primary flex items-center justify-center font-bold text-lg mb-4">
+                        2
                     </div>
-                    <h3 class="text-base font-bold text-primary">2. Cari</h3>
-                    <p class="mt-2 text-xs md:text-sm text-slate-500 leading-relaxed">
-                        Gunakan filter kategori dan lokasi kampus untuk menemukan barang Anda.
+                    <h3 class="font-bold text-slate-900 text-base">Pencocokan Cerdas</h3>
+                    <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                        Sistem mencocokkan laporan kehilangan dengan katalog barang temuan secara otomatis.
                     </p>
                 </div>
 
-                <!-- Langkah 3 -->
-                <div class="p-6 rounded-card border border-slate-200 bg-slate-50/50 hover:bg-white hover:shadow-card transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 text-primary flex items-center justify-center mb-4">
-                        <i data-lucide="shield-check" class="w-6 h-6"></i>
+                <!-- Step 3 -->
+                <div class="p-6 rounded-card bg-slate-50 border border-slate-100 text-center flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-100 text-primary flex items-center justify-center font-bold text-lg mb-4">
+                        3
                     </div>
-                    <h3 class="text-base font-bold text-primary">3. Klaim</h3>
-                    <p class="mt-2 text-xs md:text-sm text-slate-500 leading-relaxed">
-                        Ajukan bukti kepemilikan dan verifikasi ciri khusus secara online.
+                    <h3 class="font-bold text-slate-900 text-base">Verifikasi Kepemilikan</h3>
+                    <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                        Ajukan klaim dengan menyebutkan ciri khusus rahasia atau melampirkan bukti kepemilikan.
                     </p>
                 </div>
 
-                <!-- Langkah 4 -->
-                <div class="p-6 rounded-card border border-slate-200 bg-slate-50/50 hover:bg-white hover:shadow-card transition-all">
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 text-primary flex items-center justify-center mb-4">
-                        <i data-lucide="hand-helping" class="w-6 h-6"></i>
+                <!-- Step 4 -->
+                <div class="p-6 rounded-card bg-slate-50 border border-slate-100 text-center flex flex-col items-center">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-lg mb-4">
+                        4
                     </div>
-                    <h3 class="text-base font-bold text-primary">4. Ambil</h3>
-                    <p class="mt-2 text-xs md:text-sm text-slate-500 leading-relaxed">
-                        Tunjukkan bukti verifikasi dan ambil barang di Pos Keamanan Kampus.
+                    <h3 class="font-bold text-slate-900 text-base">Pengambilan Barang</h3>
+                    <p class="text-xs text-slate-500 mt-2 leading-relaxed">
+                        Ambil barang di pos keamanan kampus yang ditunjuk setelah klaim diverifikasi petugas.
                     </p>
                 </div>
             </div>

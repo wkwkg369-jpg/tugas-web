@@ -2,6 +2,22 @@
 $page_title = 'Lupa Kata Sandi - SIP-Barang Kampus';
 $current_page = 'masuk';
 require_once __DIR__ . '/includes/header.php';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $email = trim($_POST['email'] ?? '');
+    if (!empty($email)) {
+        $otp = str_pad((string)random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
+        db_execute("INSERT INTO otp_codes (email, code, type) VALUES (?, ?, 'reset_password')", [$email, $otp]);
+        $_SESSION['pending_otp'] = [
+            'email' => $email,
+            'code' => $otp
+        ];
+        set_flash_message('success', 'Kode reset kata sandi telah dikirim ke ' . $email . '. (Kode demo: ' . $otp . ')');
+        header('Location: verifikasi-otp.php?email=' . urlencode($email));
+        exit;
+    }
+}
+
 require_once __DIR__ . '/includes/navbar.php';
 ?>
 
@@ -21,7 +37,7 @@ require_once __DIR__ . '/includes/navbar.php';
             Masukkan email kampusmu, kami akan kirim kode untuk mengatur ulang kata sandi.
         </p>
 
-        <form action="verifikasi-otp.php" method="GET" class="mt-6 space-y-4 text-left">
+        <form action="lupa-sandi.php" method="POST" class="mt-6 space-y-4 text-left">
             <div>
                 <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1.5">
                     Email Kampus
@@ -34,7 +50,7 @@ require_once __DIR__ . '/includes/navbar.php';
                         type="email" 
                         name="email" 
                         required
-                        placeholder="nama@ui.ac.id" 
+                        placeholder="budi.pratama@ui.ac.id" 
                         class="input-default pl-10"
                     >
                 </div>
@@ -43,7 +59,7 @@ require_once __DIR__ . '/includes/navbar.php';
             <div class="pt-2">
                 <button type="submit" class="w-full btn-primary h-12 rounded-btn text-base font-semibold shadow-sm flex items-center justify-center gap-2">
                     <i data-lucide="send" class="w-4 h-4"></i>
-                    <span>Kirim Kode</span>
+                    <span>Kirim Kode Verifikasi</span>
                 </button>
             </div>
 

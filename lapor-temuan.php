@@ -2,9 +2,114 @@
 $page_title = 'Lapor Temuan - SIP-Barang Kampus';
 $current_page = 'lapor';
 require_once __DIR__ . '/includes/header.php';
-require_once __DIR__ . '/includes/navbar.php';
 
-$categories = get_categories();
+$user = get_logged_in_user();
+$errorMessage = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $jenis_barang = trim($_POST['jenis_barang'] ?? '');
+    $lokasi_penemuan = trim($_POST['lokasi_penemuan'] ?? '');
+    $waktu_raw = trim($_POST['waktu_penemuan'] ?? '');
+    $tempat_simpan = trim($_POST['tempat_simpan'] ?? '');
+    $deskripsi_tambahan = trim($_POST['deskripsi_tambahan'] ?? '');
+
+    if (empty($jenis_barang) || empty($lokasi_penemuan) || empty($tempat_simpan)) {
+        $errorMessage = 'Semua kolom bertanda bintang (*) wajib diisi.';
+    } else {
+        $waktuFormatted = !empty($waktu_raw) ? date('d M Y, H:i', strtotime($waktu_raw)) . ' WIB' : date('d M Y, H:i') . ' WIB';
+
+        // Categorize
+        $kategori = 'Aksesoris & Botol Minum';
+        $slug = 'aksesoris';
+        $icon = 'sparkles';
+        $namaBarang = $jenis_barang;
+
+        if (stripos($jenis_barang, 'Elektronik') !== false || stripos($jenis_barang, 'HP') !== false || stripos($jenis_barang, 'Laptop') !== false) {
+            $kategori = 'Elektronik & Gadget';
+            $slug = 'elektronik';
+            $icon = 'smartphone';
+            $namaBarang = 'Elektronik / Gadget Temuan';
+        } elseif (stripos($jenis_barang, 'Dompet') !== false || stripos($jenis_barang, 'KTM') !== false) {
+            $kategori = 'Dompet & Kartu Identitas';
+            $slug = 'dompet';
+            $icon = 'wallet';
+            $namaBarang = 'Dompet / Kartu Identitas Temuan';
+        } elseif (stripos($jenis_barang, 'Kunci') !== false) {
+            $kategori = 'Kunci Kendaraan';
+            $slug = 'kunci';
+            $icon = 'key-round';
+            $namaBarang = 'Kunci Kendaraan Temuan';
+        } elseif (stripos($jenis_barang, 'Tas') !== false || stripos($jenis_barang, 'Pakaian') !== false || stripos($jenis_barang, 'Jaket') !== false) {
+            $kategori = 'Tas & Pakaian';
+            $slug = 'tas';
+            $icon = 'backpack';
+            $namaBarang = 'Tas / Pakaian Temuan';
+        } else {
+            $namaBarang = 'Barang Temuan: ' . $jenis_barang;
+        }
+
+        // Handle File Upload
+        $fotoFilename = null;
+        if (isset($_FILES['foto_temuan']) && $_FILES['foto_temuan']['error'] === UPLOAD_ERR_OK) {
+            $tmpName = $_FILES['foto_temuan']['tmp_name'];
+            $origName = basename($_FILES['foto_temuan']['name']);
+            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
+            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                $fotoFilename = 'found_' . time() . '_' . random_int(100, 999) . '.' . $ext;
+                $targetPath = __DIR__ . '/assets/uploads/' . $fotoFilename;
+                move_uploaded_file($tmpName, $targetPath);
+            }
+        }
+
+        $kode = 'TRX-' . random_int(88220, 88999);
+        $pelaporId = $user ? $user['id'] : 1;
+        $pelaporNama = $user ? ($user['nama'] . ' (Mahasiswa)') : 'Budi Pratama (Mahasiswa)';
+
+        $deskripsi = "Ditemukan {$jenis_barang} di {$lokasi_penemuan}. Saat ini barang disimpan di: {$tempat_simpan}.";
+        if (!empty($deskripsi_tambahan)) {
+            $deskripsi .= ' ' . $deskripsi_tambahan;
+        }
+
+        $sql = "INSERT INTO items (
+            kode, nama, kategori, kategori_slug, status, jenis_laporan, lokasi, lokasi_singkat,
+            waktu_kejadian, deskripsi, ciri_umum, tempat_simpan, pelapor_id,
+            pelapor_nama, pelapor_tipe, foto, icon, warna_placeholder
+        ) VALUES (?, ?, ?, ?, 'Ditemukan', 'temuan', ?, ?, ?, ?, ?, ?, ?, ?, 'Mahasiswa', ?, ?, '#d1fae5')";
+
+        $ok = db_execute($sql, [
+            $kode,
+            $namaBarang,
+            $kategori,
+            $slug,
+            $lokasi_penemuan,
+            $lokasi_penemuan,
+            $waktuFormatted,
+            $deskripsi,
+            $deskripsi,
+            $tempat_simpan,
+            $pelaporId,
+            $pelaporNama,
+            $fotoFilename,
+            $icon
+        ]);
+
+        if ($ok) {
+            db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread) VALUES (?, ?, ?, 'package-check', 1)", [
+                $pelaporId,
+                'Laporan Temuan Berhasil Dibuat!',
+                "Terima kasih atas kebaikan Anda. Laporan temuan '{$namaBarang}' (#{kode}) telah tercatat di sistem."
+            ]);
+
+            set_flash_message('success', "Laporan temuan berhasil dikirim! Kode laporan: #{$kode}. Terima kasih telah berinisiatif baik.");
+            header('Location: riwayat.php?tab=laporan');
+            exit;
+        } else {
+            $errorMessage = 'Gagal menyimpan laporan temuan. Silakan periksa kembali formulir Anda.';
+        }
+    }
+}
+
+require_once __DIR__ . '/includes/navbar.php';
 ?>
 
 <main class="flex-1 py-10">
@@ -35,7 +140,14 @@ $categories = get_categories();
                 </div>
             </div>
 
-            <form action="riwayat.php" method="POST" class="space-y-6">
+            <?php if (!empty($errorMessage)): ?>
+                <div class="mb-5 p-3.5 rounded-btn bg-red-50 border border-red-200 text-xs sm:text-sm text-red-700 flex items-center gap-2.5">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 shrink-0"></i>
+                    <span><?= htmlspecialchars($errorMessage) ?></span>
+                </div>
+            <?php endif; ?>
+
+            <form action="lapor-temuan.php" method="POST" enctype="multipart/form-data" class="space-y-6">
                 
                 <!-- Jenis / Kategori Barang Dropdown -->
                 <div>
@@ -61,10 +173,10 @@ $categories = get_categories();
                 <!-- Foto Barang Temuan -->
                 <div>
                     <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1.5">
-                        Foto Barang Temuan <span class="text-red-500">*</span>
+                        Foto Barang Temuan (Opsional)
                     </label>
-                    <div class="upload-zone p-6 text-center rounded-btn bg-slate-50 border-2 border-dashed border-slate-200 hover:border-primary transition-colors">
-                        <input type="file" name="foto_temuan" required class="hidden" accept="image/*">
+                    <div class="upload-zone p-6 text-center rounded-btn bg-slate-50 border-2 border-dashed border-slate-200 hover:border-primary transition-colors cursor-pointer" onclick="this.querySelector('input').click()">
+                        <input type="file" name="foto_temuan" class="hidden" accept="image/*" onchange="previewUpload(this)">
                         <div class="upload-placeholder flex flex-col items-center justify-center gap-1.5 text-slate-500">
                             <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-1">
                                 <i data-lucide="camera" class="w-5 h-5"></i>
@@ -111,6 +223,7 @@ $categories = get_categories();
                                 type="datetime-local" 
                                 name="waktu_penemuan" 
                                 required
+                                value="<?= date('Y-m-d\TH:i') ?>"
                                 class="input-default pl-10 text-slate-700"
                             >
                         </div>
@@ -151,5 +264,21 @@ $categories = get_categories();
 
     </div>
 </main>
+
+<script>
+function previewUpload(input) {
+    if (input.files && input.files[0]) {
+        const zone = input.closest('.upload-zone');
+        const placeholder = zone.querySelector('.upload-placeholder');
+        const preview = zone.querySelector('.upload-preview');
+        const fileName = zone.querySelector('.file-name');
+        
+        placeholder.classList.add('hidden');
+        preview.classList.remove('hidden');
+        preview.classList.add('flex');
+        fileName.textContent = input.files[0].name;
+    }
+}
+</script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

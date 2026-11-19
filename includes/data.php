@@ -1,263 +1,221 @@
 <?php
 /**
- * Mock Data & Helper Functions untuk SIP-Barang Kampus
- * Didesain rapi agar teman backend dapat dengan mudah mengganti data array ini
- * dengan query database (MySQL / PDO) nantinya.
+ * Data Service & Helper Functions untuk SIP-Barang Kampus
+ * Terintegrasi langsung dengan Database (MySQL / SQLite).
  */
 
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/auth.php';
+
 // Kategori Barang
-function get_categories() {
-    return [
-        ['id' => 'all', 'name' => 'Semua Kategori'],
-        ['id' => 'elektronik', 'name' => 'Elektronik & Gadget'],
-        ['id' => 'dompet', 'name' => 'Dompet & Kartu Identitas'],
-        ['id' => 'kunci', 'name' => 'Kunci Kendaraan'],
-        ['id' => 'tas', 'name' => 'Tas & Pakaian'],
-        ['id' => 'aksesoris', 'name' => 'Aksesoris & Botol Minum']
+function get_categories(): array {
+    $rows = db_fetch_all("SELECT id, name, slug, icon FROM categories ORDER BY id ASC");
+    $result = [
+        ['id' => 'all', 'name' => 'Semua Kategori', 'slug' => 'all', 'icon' => 'grid']
     ];
+    foreach ($rows as $r) {
+        $result[] = [
+            'id' => $r['slug'],
+            'name' => $r['name'],
+            'slug' => $r['slug'],
+            'icon' => $r['icon']
+        ];
+    }
+    return $result;
 }
 
 // Lokasi Kampus
-function get_locations() {
-    return [
-        'Semua Lokasi Kampus',
-        'Perpustakaan Pusat',
-        'Gedung Kuliah Bersama (GKB)',
-        'Parkiran Sepeda Motor Barat',
-        'Kantin Pusat Rumpun Ilmu',
-        'Laboratorium Komputer',
-        'Gedung Rektorat',
-        'Masjid Kampus',
-        'Halte Bus Kampus',
-        'Gazebo & Area Terbuka'
-    ];
+function get_locations(): array {
+    $rows = db_fetch_all("SELECT name FROM locations ORDER BY id ASC");
+    $locs = ['Semua Lokasi Kampus'];
+    foreach ($rows as $r) {
+        $locs[] = $r['name'];
+    }
+    return $locs;
 }
 
-// Data Barang (Katalog & Beranda)
-function get_mock_items() {
-    return [
-        [
-            'id' => 1,
-            'kode' => 'TRX-88219',
-            'nama' => 'Tumbler Hydro Flask 32oz Biru',
-            'kategori' => 'Aksesoris & Botol Minum',
-            'kategori_slug' => 'aksesoris',
-            'status' => 'Ditemukan',
-            'lokasi' => 'Ruang Kelas 304, Gedung Kuliah Bersama (GKB)',
-            'lokasi_singkat' => 'R.304 Gedung Kuliah Bersama',
-            'waktu' => '16 November 2026, pukul 09:15 WIB',
-            'waktu_singkat' => 'Kemarin, 14:15 WIB',
-            'deskripsi' => 'Ditemukan tumbler stainless warna biru dongker dalam kondisi baik. Terdapat stiker fakultas di bagian bawah botol. Tidak ada tanda kepemilikan nama tertulis.',
-            'ciri_umum' => 'Tumbler warna biru navy doff ukuran 32oz dengan tutup fleksibel hitam.',
-            'ciri_khusus' => 'Ada stiker bulat FIK di dasar botol dan sedikit baret halus di dekat leher tumbler.',
-            'tempat_simpan' => 'Pos Keamanan Rektorat Gedung A (Lt. 1)',
-            'pelapor' => 'Petugas Keamanan Kampus (Pos A)',
-            'icon' => 'smartphone',
-            'warna_placeholder' => '#dbeafe'
-        ],
-        [
-            'id' => 2,
-            'kode' => 'TRX-88218',
-            'nama' => 'Dompet Kulit Cokelat & KTM',
-            'kategori' => 'Dompet & Kartu Identitas',
-            'kategori_slug' => 'dompet',
-            'status' => 'Hilang',
-            'lokasi' => 'Perpustakaan Pusat Lantai 2',
-            'lokasi_singkat' => 'Perpustakaan Pusat Lt. 2',
-            'waktu' => '17 November 2026, 10:30 WIB',
-            'waktu_singkat' => 'Hari ini, 10:30 WIB',
-            'deskripsi' => 'Dompet lipat kulit warna cokelat tua tertinggal di meja baca dekat rak buku ilmu sosial. Di dalamnya terdapat KTM dan kartu penting lainnya.',
-            'ciri_umum' => 'Dompet kulit lipat dua warna cokelat gelap merk Bogesi.',
-            'ciri_khusus' => 'Di slot tersembunyi tersimpan struk ATM BNI dan foto polaroid keluarga.',
-            'tempat_simpan' => 'Dalam pencarian pelapor',
-            'pelapor' => 'Budi Pratama (Mahasiswa)',
-            'icon' => 'wallet',
-            'warna_placeholder' => '#fee2e2'
-        ],
-        [
-            'id' => 3,
-            'kode' => 'TRX-88215',
-            'nama' => 'Kunci Motor Honda Vario 160',
-            'kategori' => 'Kunci Kendaraan',
-            'kategori_slug' => 'kunci',
-            'status' => 'Ditemukan',
-            'lokasi' => 'Parkiran Sepeda Motor Barat Blok C',
-            'lokasi_singkat' => 'Parkiran Sepeda Motor Barat',
-            'waktu' => '14 November 2026, 17:00 WIB',
-            'waktu_singkat' => '14 Nov 2026, 17:00 WIB',
-            'deskripsi' => 'Kunci kontak smartkey Honda Vario tergantung di tiang pembatas parkiran motor.',
-            'ciri_umum' => 'Remote keyless Honda dengan cover silikon merah dan gantungan tali kain.',
-            'ciri_khusus' => 'Gantungan kunci bertuliskan nama angkatan 2023.',
-            'tempat_simpan' => 'Pos Satpam Parkiran Barat',
-            'pelapor' => 'Petugas Parkir',
-            'icon' => 'key-round',
-            'warna_placeholder' => '#d1fae5'
-        ],
-        [
-            'id' => 4,
-            'kode' => 'TRX-88210',
-            'nama' => 'Jaket Hoodie Abu-abu Uniqlo',
-            'kategori' => 'Tas & Pakaian',
-            'kategori_slug' => 'tas',
-            'status' => 'Hilang',
-            'lokasi' => 'Kantin Pusat Rumpun Ilmu Lt. 1',
-            'lokasi_singkat' => 'Kantin RIK Lt. 1',
-            'waktu' => '13 November 2026, 12:15 WIB',
-            'waktu_singkat' => '13 Nov 2026, 12:15 WIB',
-            'deskripsi' => 'Jaket hoodie warna abu-abu misty size L tertinggal di sandaran kursi kantin saat jam makan siang.',
-            'ciri_umum' => 'Hoodie zipper polos abu-abu merk Uniqlo size L.',
-            'ciri_khusus' => 'Tali hoodie sebelah kanan sedikit terurai ujungnya.',
-            'tempat_simpan' => 'Dalam pencarian pelapor',
-            'pelapor' => 'Ahmad Rian (Mahasiswa)',
-            'icon' => 'backpack',
-            'warna_placeholder' => '#fee2e2'
-        ],
-        [
-            'id' => 5,
-            'kode' => 'TRX-88204',
-            'nama' => 'Laptop Asus Vivobook 14',
-            'kategori' => 'Elektronik & Gadget',
-            'kategori_slug' => 'elektronik',
-            'status' => 'Ditemukan',
-            'lokasi' => 'Laboratorium Komputer Gedung B',
-            'lokasi_singkat' => 'Lab Komputer Gedung B',
-            'waktu' => '12 November 2026, 16:30 WIB',
-            'waktu_singkat' => '12 Nov 2026, 16:30 WIB',
-            'deskripsi' => 'Laptop Asus warna silver lengkap dengan sleeve bag hitam ditemukan di meja PC Lab 2.',
-            'ciri_umum' => 'Laptop 14 inch warna silver abu dengan charger asli.',
-            'ciri_khusus' => 'Ada stiker Github dan sticker logo React di cover belakang monitor.',
-            'tempat_simpan' => 'Ruang Teknisi Lab Komputer Lt. 2',
-            'pelapor' => 'Laboran Komputer',
-            'icon' => 'laptop',
-            'warna_placeholder' => '#d1fae5'
-        ],
-        [
-            'id' => 6,
-            'kode' => 'TRX-88198',
-            'nama' => 'Payung Lipat Otomatis Biru',
-            'kategori' => 'Aksesoris & Botol Minum',
-            'kategori_slug' => 'aksesoris',
-            'status' => 'Dikembalikan',
-            'lokasi' => 'Masjid Ukhuwah Islamiyah / Lobi Rektorat',
-            'lokasi_singkat' => 'Lobi Utama Gedung Rektorat',
-            'waktu' => '10 November 2026, 13:00 WIB',
-            'waktu_singkat' => '10 Nov 2026, 13:00 WIB',
-            'deskripsi' => 'Payung lipat tombol otomatis warna navy blue, sudah berhasil diambil oleh pemilik aslinya setelah verifikasi tanda pengenal.',
-            'ciri_umum' => 'Payung lipat 3 warna biru gelap pegangan kayu.',
-            'ciri_khusus' => 'Ada inisial nama kecil di tali pengikat.',
-            'tempat_simpan' => 'Sudah diserahkan ke pemilik',
-            'pelapor' => 'Petugas Keamanan Lobi',
-            'icon' => 'shirt',
-            'warna_placeholder' => '#e0e7ff'
-        ],
-        [
-            'id' => 7,
-            'kode' => 'TRX-88190',
-            'nama' => 'Kacamata Minus Frame Hitam',
-            'kategori' => 'Aksesoris & Botol Minum',
-            'kategori_slug' => 'aksesoris',
-            'status' => 'Dalam Verifikasi',
-            'lokasi' => 'Gazebo Rumpun Soshum',
-            'lokasi_singkat' => 'Gazebo Rumpun Soshum',
-            'waktu' => '09 November 2026, 15:45 WIB',
-            'waktu_singkat' => '09 Nov 2026, 15:45 WIB',
-            'deskripsi' => 'Kacamata baca frame kotak warna hitam doff lengkap dengan kotak kacamata abu-abu.',
-            'ciri_umum' => 'Frame kacamata plastik hitam ringan.',
-            'ciri_khusus' => 'Engsel kanan agak sedikit longgar.',
-            'tempat_simpan' => 'Pos Satpam Dekanat Soshum',
-            'pelapor' => 'Mahasiswa Soshum',
-            'icon' => 'wallet',
-            'warna_placeholder' => '#fef3c7'
-        ],
-        [
-            'id' => 8,
-            'kode' => 'TRX-88185',
-            'nama' => 'Flashdisk Sandisk 64GB',
-            'kategori' => 'Elektronik & Gadget',
-            'kategori_slug' => 'elektronik',
-            'status' => 'Hilang',
-            'lokasi' => 'Perpustakaan Pusat Lantai 1',
-            'lokasi_singkat' => 'Perpustakaan Pusat Lt. 1',
-            'waktu' => '08 November 2026, 11:20 WIB',
-            'waktu_singkat' => '08 Nov 2026, 11:20 WIB',
-            'deskripsi' => 'Flashdisk USB 3.0 warna merah hitam tertancap di komputer OPAC perpustakaan.',
-            'ciri_umum' => 'Sandisk Cruzer Blade 64GB bodi hitam strip merah.',
-            'ciri_khusus' => 'Berisi folder skripsi atas nama Sarah N.',
-            'tempat_simpan' => 'Dalam pencarian pelapor',
-            'pelapor' => 'Sarah Nurhaliza',
-            'icon' => 'smartphone',
-            'warna_placeholder' => '#fee2e2'
-        ],
-        [
-            'id' => 9,
-            'kode' => 'TRX-88180',
-            'nama' => 'Charger Laptop Lenovo 65W',
-            'kategori' => 'Elektronik & Gadget',
-            'kategori_slug' => 'elektronik',
-            'status' => 'Ditemukan',
-            'lokasi' => 'Halte Bus Kuning Teknik',
-            'lokasi_singkat' => 'Halte Bus Kuning Teknik',
-            'waktu' => '07 November 2026, 09:10 WIB',
-            'waktu_singkat' => '07 Nov 2026, 09:10 WIB',
-            'deskripsi' => 'Adaptor charger USB Type-C Lenovo 65W original tertinggal di bangku tunggu halte.',
-            'ciri_umum' => 'Charger kotak warna hitam kabel USB-C tebal.',
-            'ciri_khusus' => 'Ada isolasi hitam pelindung di ujung kabel dekat port.',
-            'tempat_simpan' => 'Pos Satpam Gerbang Utama Teknik',
-            'pelapor' => 'Driver Bus Kampus',
-            'icon' => 'laptop',
-            'warna_placeholder' => '#d1fae5'
-        ]
-    ];
+// Data Semua Barang (Katalog & Beranda)
+function get_mock_items(): array {
+    return get_items();
+}
+
+function get_items(array $filters = []): array {
+    $sql = "SELECT * FROM items WHERE 1=1";
+    $params = [];
+
+    if (!empty($filters['q'])) {
+        $sql .= " AND (nama LIKE ? OR deskripsi LIKE ? OR ciri_umum LIKE ? OR lokasi LIKE ? OR kode LIKE ?)";
+        $term = '%' . $filters['q'] . '%';
+        $params[] = $term;
+        $params[] = $term;
+        $params[] = $term;
+        $params[] = $term;
+        $params[] = $term;
+    }
+
+    if (!empty($filters['status']) && $filters['status'] !== 'all') {
+        $sql .= " AND status = ?";
+        $params[] = $filters['status'];
+    }
+
+    if (!empty($filters['kategori']) && $filters['kategori'] !== 'all') {
+        $sql .= " AND (kategori_slug = ? OR kategori = ?)";
+        $params[] = $filters['kategori'];
+        $params[] = $filters['kategori'];
+    }
+
+    if (!empty($filters['lokasi']) && $filters['lokasi'] !== 'Semua Lokasi Kampus') {
+        $sql .= " AND lokasi LIKE ?";
+        $params[] = '%' . $filters['lokasi'] . '%';
+    }
+
+    if (!empty($filters['jenis'])) {
+        $sql .= " AND jenis_laporan = ?";
+        $params[] = $filters['jenis'];
+    }
+
+    $sql .= " ORDER BY id DESC";
+
+    if (!empty($filters['limit'])) {
+        $sql .= " LIMIT " . intval($filters['limit']);
+    }
+
+    $items = db_fetch_all($sql, $params);
+
+    // Format item fields to guarantee expected keys exist
+    return array_map(function($it) {
+        return format_item_data($it);
+    }, $items);
+}
+
+function get_item_by_id($id): ?array {
+    $item = db_fetch_one("SELECT * FROM items WHERE id = ?", [intval($id)]);
+    return $item ? format_item_data($item) : null;
+}
+
+function get_item_by_kode(string $kode): ?array {
+    $item = db_fetch_one("SELECT * FROM items WHERE kode = ?", [$kode]);
+    return $item ? format_item_data($item) : null;
+}
+
+function format_item_data(array $it): array {
+    $it['id'] = intval($it['id']);
+    $it['lokasi_singkat'] = $it['lokasi_singkat'] ?: $it['lokasi'];
+    $it['waktu_singkat'] = $it['waktu_kejadian'];
+    $it['waktu'] = $it['waktu_kejadian'];
+    $it['pelapor'] = $it['pelapor_nama'] ?? 'Civitas Kampus';
+    $it['icon'] = $it['icon'] ?: 'package';
+    $it['warna_placeholder'] = $it['warna_placeholder'] ?: '#dbeafe';
+    return $it;
 }
 
 // Data Notifikasi
-function get_mock_notifications() {
-    return [
-        [
-            'id' => 1,
-            'judul' => 'Laporan Barang Hilang Telah Diverifikasi Petugas!',
-            'pesan' => 'Laporan Anda mengenai "KTM Makara & Dompet Kulit" telah disetujui dan kini aktif di daftar pencarian kampus.',
-            'waktu' => '5 menit lalu',
-            'unread' => true,
-            'icon' => 'bell'
-        ],
-        [
-            'id' => 2,
-            'judul' => 'Potensi Temuan: Ada Barang Baru yang Cocok!',
-            'pesan' => 'Seorang mahasiswa baru saja melaporkan temuan "Tumbler Biru di GKB R.304". Periksa detailnya sekarang.',
-            'waktu' => '1 jam lalu',
-            'unread' => true,
-            'icon' => 'search'
-        ],
-        [
-            'id' => 3,
-            'judul' => 'Klaim Kepemilikan Barang Telah Disetujui!',
-            'pesan' => 'Klaim Anda untuk "Kunci Motor Honda Vario" disetujui. Silakan ambil barang di Pos Satpam Barat.',
-            'waktu' => 'Kemarin',
-            'unread' => false,
-            'icon' => 'check-circle'
-        ],
-        [
-            'id' => 4,
-            'judul' => 'Laporan Selesai: Barang Berhasil Dikembalikan',
-            'pesan' => 'Status laporan "Payung Lipat Otomatis" telah diperbarui menjadi Selesai / Dikembalikan ke pemilik.',
-            'waktu' => '3 hari lalu',
-            'unread' => false,
-            'icon' => 'package-check'
-        ],
-        [
-            'id' => 5,
-            'judul' => 'Tips Keamanan: Beri Tanda Khusus pada Barang Anda',
-            'pesan' => 'Selalu beri label nama atau gantungan unik pada barang berharga untuk mempermudah identifikasi penemuan.',
-            'waktu' => '1 minggu lalu',
-            'unread' => false,
-            'icon' => 'shield'
-        ]
-    ];
+function get_mock_notifications(?int $userId = null): array {
+    if ($userId === null) {
+        $user = get_logged_in_user();
+        $userId = $user ? $user['id'] : 1;
+    }
+
+    $rows = db_fetch_all("SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC", [$userId]);
+    if (empty($rows)) {
+        // Fallback to all notifications
+        $rows = db_fetch_all("SELECT * FROM notifications ORDER BY id DESC LIMIT 5");
+    }
+
+    return array_map(function($n) {
+        return [
+            'id' => intval($n['id']),
+            'judul' => $n['judul'],
+            'pesan' => $n['pesan'],
+            'waktu' => format_relative_time($n['created_at']),
+            'unread' => (bool)$n['is_unread'],
+            'icon' => $n['icon'] ?: 'bell',
+            'link' => $n['link'] ?? '#'
+        ];
+    }, $rows);
+}
+
+function get_unread_notifications_count(?int $userId = null): int {
+    if ($userId === null) {
+        $user = get_logged_in_user();
+        if (!$user) return 0;
+        $userId = $user['id'];
+    }
+
+    $res = db_fetch_one("SELECT COUNT(*) as unread_count FROM notifications WHERE user_id = ? AND is_unread = 1", [$userId]);
+    return intval($res['unread_count'] ?? 0);
+}
+
+function mark_all_notifications_read(?int $userId = null): void {
+    if ($userId === null) {
+        $user = get_logged_in_user();
+        if (!$user) return;
+        $userId = $user['id'];
+    }
+    db_execute("UPDATE notifications SET is_unread = 0 WHERE user_id = ?", [$userId]);
+}
+
+// User Reports & Claims
+function get_user_reports(?int $userId = null): array {
+    if ($userId === null) {
+        $user = get_logged_in_user();
+        $userId = $user ? $user['id'] : null;
+    }
+
+    if ($userId) {
+        $rows = db_fetch_all("SELECT * FROM items WHERE pelapor_id = ? ORDER BY id DESC", [$userId]);
+        if (!empty($rows)) {
+            return array_map('format_item_data', $rows);
+        }
+    }
+
+    // Default sample reports for demo
+    return array_slice(get_items(), 0, 3);
+}
+
+function get_user_claims(?int $userId = null): array {
+    if ($userId === null) {
+        $user = get_logged_in_user();
+        $userId = $user ? $user['id'] : null;
+    }
+
+    $sql = "SELECT c.*, i.nama as item_nama, i.kategori as item_kategori, i.kode as item_kode, i.icon as item_icon 
+            FROM claims c 
+            JOIN items i ON c.item_id = i.id";
+    $params = [];
+
+    if ($userId) {
+        $sql .= " WHERE c.user_id = ?";
+        $params[] = $userId;
+    }
+    $sql .= " ORDER BY c.id DESC";
+
+    $rows = db_fetch_all($sql, $params);
+    if (empty($rows)) {
+        // Return demo row if none found
+        $rows = db_fetch_all("SELECT c.*, i.nama as item_nama, i.kategori as item_kategori, i.kode as item_kode 
+                              FROM claims c 
+                              JOIN items i ON c.item_id = i.id 
+                              ORDER BY c.id DESC LIMIT 1");
+    }
+
+    return $rows;
+}
+
+// Relative time formatting helper
+function format_relative_time(string $datetimeStr): string {
+    $time = strtotime($datetimeStr);
+    if (!$time) return $datetimeStr;
+    $diff = time() - $time;
+    if ($diff < 60) return 'Baru saja';
+    if ($diff < 3600) return floor($diff / 60) . ' menit lalu';
+    if ($diff < 86400) return floor($diff / 3600) . ' jam lalu';
+    if ($diff < 172800) return 'Kemarin';
+    return date('d M Y', $time);
 }
 
 // Helper Render Badge Status
-function render_status_badge($status, $size = 'normal') {
+function render_status_badge($status, $size = 'normal'): string {
     $classes = [
         'Hilang' => 'bg-red-50 text-red-600 border border-red-200',
         'Ditemukan' => 'bg-emerald-50 text-emerald-600 border border-emerald-200',
@@ -283,4 +241,3 @@ function render_status_badge($status, $size = 'normal') {
         ' . htmlspecialchars($status) . '
     </span>';
 }
-?>
