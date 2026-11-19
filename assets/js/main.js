@@ -103,18 +103,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   }
 
-  // 6. Submit Klaim Mock (Triggers toast & redirects to klaim-berhasil.php)
-  const formKlaim = document.getElementById('formKlaim');
-  if (formKlaim) {
-    formKlaim.addEventListener('submit', function (e) {
-      e.preventDefault();
-      closeModal();
-      showToast('Klaim berhasil diajukan', 'Menunggu konfirmasi dari admin. Kami akan memberi tahu kamu setelah diproses.');
-      setTimeout(() => {
-        window.location.href = 'klaim-berhasil.php';
-      }, 1200);
-    });
-  }
+  // 6. Form klaim memakai submit native ke klaim-berhasil.php (POST multipart).
+  //    Handler mock lama (preventDefault + redirect GET) dihapus karena menelan data klaim.
 
   // 7. Toast Notification Handler
   window.showToast = function (title, message) {

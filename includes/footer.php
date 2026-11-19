@@ -34,7 +34,7 @@
     </div>
 </div>
 
-<!-- Main Interactive JS -->
-<script src="assets/js/main.js"></script>
+<!-- Main Interactive JS (versi dari mtime: cegah cache lama di browser) -->
+<script src="assets/js/main.js?v=<?= @filemtime(__DIR__ . '/../assets/js/main.js') ?: '1' ?>"></script>
 </body>
 </html>
