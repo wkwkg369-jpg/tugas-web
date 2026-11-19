@@ -26,3 +26,8 @@ composer.phar
 .env
 .env.local
 .env.*.local
+
+# Sesi PHP & hasil upload runtime
+/sessions/sess_*
+/assets/uploads/*
+!/assets/uploads/.gitkeep
