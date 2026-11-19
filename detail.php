@@ -159,7 +159,40 @@ $bolehKlaim = in_array($item['status'], ['Ditemukan', 'Hilang', 'Dalam Verifikas
                         </div>
                     <?php endif; ?>
 
-                    <!-- Tempat Simpan Box (Figma: 548x56, soft blue) -->
+                    <!-- Ciri Khusus (rahasia): hanya pelapor sendiri & admin/petugas -->
+                    <?php
+                    $bolehLihatRahasia = $user && (
+                        (int) ($item['pelapor_id'] ?? 0) === (int) $user['id']
+                        || in_array($user['role'] ?? '', ['admin', 'petugas'], true)
+                    );
+                    ?>
+                    <?php if (!empty($item['ciri_khusus'])): ?>
+                        <?php if ($bolehLihatRahasia): ?>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
+                                    <i data-lucide="lock" class="w-4 h-4 text-amber-500"></i>
+                                    <span>Ciri Khusus / Bukti Rahasia</span>
+                                    <span class="text-[10px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2 py-0.5">Khusus Petugas</span>
+                                </h3>
+                                <p class="text-sm text-amber-900 leading-relaxed bg-amber-50 border border-amber-200 p-4 rounded-xl">
+                                    <?= nl2br(htmlspecialchars($item['ciri_khusus'])) ?>
+                                </p>
+                                <p class="text-[11px] text-slate-400 mt-1.5">Data ini tidak ditampilkan pada katalog publik; dipakai untuk mencocokkan klaim.</p>
+                            </div>
+                        <?php else: ?>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 mb-2 flex items-center gap-2">
+                                    <i data-lucide="lock" class="w-4 h-4 text-slate-400"></i>
+                                    <span>Ciri Khusus / Bukti Rahasia</span>
+                                </h3>
+                                <p class="text-xs text-slate-500 leading-relaxed bg-slate-50 border border-slate-200 p-4 rounded-xl flex items-center gap-2">
+                                    <i data-lucide="eye-off" class="w-4 h-4 text-slate-400 shrink-0"></i>
+                                    <span>Disembunyikan. Hanya pelapor dan petugas keamanan yang dapat melihat ciri khusus ini.</span>
+                                </p>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
                     <div class="p-4 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 flex items-center gap-3">
                         <div class="w-8 h-8 rounded-lg bg-blue-200 text-blue-700 flex items-center justify-center shrink-0">
                             <i data-lucide="archive" class="w-4 h-4"></i>
@@ -230,6 +263,7 @@ $bolehKlaim = in_array($item['status'], ['Ditemukan', 'Hilang', 'Dalam Verifikas
 
         <!-- Modal Body & Form -->
         <form id="formKlaim" action="klaim-berhasil.php" method="POST" enctype="multipart/form-data" class="p-5 sm:p-6 space-y-4">
+                <?= csrf_field() ?>
             <input type="hidden" name="item_id" value="<?= $item['id'] ?>">
             
             <!-- Item Banner -->

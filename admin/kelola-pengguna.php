@@ -3,6 +3,9 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/data.php';
 
+// Wajib login admin/petugas SEBELUM handler apa pun dijalankan.
+require_admin('../masuk.php');
+
 // Handle AJAX Status Toggle
 if (isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'toggle_status') {
     header('Content-Type: application/json');
@@ -43,9 +46,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $role = trim($_POST['role'] ?? 'petugas');
         $status = trim($_POST['status'] ?? 'Aktif');
         $isActive = ($status === 'Aktif') ? 1 : 0;
-        $rawPass = trim($_POST['password'] ?? 'password123');
-        if (empty($rawPass)) {
-            $rawPass = 'password123';
+        $rawPass = trim($_POST['password'] ?? '');
+        if (strlen($rawPass) < 8) {
+            set_flash_message('error', 'Kata sandi awal minimal 8 karakter. Akun tidak dibuat.');
+            header('Location: kelola-pengguna.php');
+            exit;
         }
         $passHash = password_hash($rawPass, PASSWORD_DEFAULT);
 
@@ -81,6 +86,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($userId > 0 && !empty($nama) && !empty($email)) {
             if (!empty($newPass)) {
+                if (strlen($newPass) < 8) {
+                    set_flash_message('error', 'Kata sandi baru minimal 8 karakter. Perubahan tidak disimpan.');
+                    header('Location: kelola-pengguna.php');
+                    exit;
+                }
                 $passHash = password_hash($newPass, PASSWORD_DEFAULT);
                 db_execute(
                     "UPDATE users SET nama = ?, nim = ?, email = ?, phone = ?, prodi = ?, role = ?, status = ?, is_active = ?, password = ? WHERE id = ?",
@@ -101,9 +111,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 3. Reset Password User
     if ($action === 'reset_password') {
         $userId = intval($_POST['user_id'] ?? 0);
-        $defaultPass = password_hash('password123', PASSWORD_DEFAULT);
-        db_execute("UPDATE users SET password = ? WHERE id = ?", [$defaultPass, $userId]);
-        set_flash_message('success', "Kata sandi pengguna berhasil di-reset menjadi 'password123'.");
+        // Kata sandi sementara acak, bukan default yang mudah ditebak.
+        $tempPass = bin2hex(random_bytes(6));
+        db_execute("UPDATE users SET password = ? WHERE id = ?", [password_hash($tempPass, PASSWORD_DEFAULT), $userId]);
+        set_flash_message('success', "Kata sandi sementara pengguna: {$tempPass} — minta pengguna segera menggantinya.");
         header('Location: kelola-pengguna.php');
         exit;
     }
@@ -125,6 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Handle GET Toggle Status Fallback
 if (isset($_GET['action']) && $_GET['action'] === 'toggle' && isset($_GET['id'])) {
+    require_csrf();
     $userId = intval($_GET['id']);
     $user = db_fetch_one("SELECT * FROM users WHERE id = ?", [$userId]);
     if ($user) {
@@ -394,6 +406,7 @@ $usersList = db_fetch_all($sql, $params);
         </div>
 
         <form method="POST" action="kelola-pengguna.php" class="space-y-4">
+                <?= csrf_field() ?>
             <input type="hidden" name="action" value="tambah_pengguna">
 
             <div>
@@ -524,6 +537,7 @@ $usersList = db_fetch_all($sql, $params);
         <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
             <form method="POST" action="kelola-pengguna.php"
                 onsubmit="return confirm('Reset kata sandi pengguna ini menjadi: password123?')">
+                <?= csrf_field() ?>
                 <input type="hidden" name="action" value="reset_password">
                 <input type="hidden" name="user_id" id="detailUserIdReset" value="">
                 <button type="submit"
@@ -571,6 +585,7 @@ $usersList = db_fetch_all($sql, $params);
         </div>
 
         <form method="POST" action="kelola-pengguna.php" class="space-y-4">
+                <?= csrf_field() ?>
             <input type="hidden" name="action" value="edit_pengguna">
             <input type="hidden" name="user_id" id="editUserId" value="">
 
@@ -656,6 +671,7 @@ $usersList = db_fetch_all($sql, $params);
 
 <!-- Hidden Delete Form -->
 <form id="deleteUserForm" method="POST" action="kelola-pengguna.php" style="display:none;">
+                <?= csrf_field() ?>
     <input type="hidden" name="action" value="hapus_pengguna">
     <input type="hidden" name="user_id" id="deleteUserIdInput" value="">
 </form>
@@ -695,6 +711,7 @@ $usersList = db_fetch_all($sql, $params);
         const formData = new FormData();
         formData.append('ajax_action', 'toggle_status');
         formData.append('user_id', userId);
+        formData.append('csrf_token', '<?= csrf_token() ?>');
 
         fetch('kelola-pengguna.php', {
             method: 'POST',
@@ -713,7 +730,7 @@ $usersList = db_fetch_all($sql, $params);
             })
             .catch(err => {
                 // Fallback to GET redirection
-                window.location.href = `kelola-pengguna.php?action=toggle&id=${userId}`;
+                window.location.href = `kelola-pengguna.php?action=toggle&csrf_token=<?= urlencode(csrf_token()) ?>&id=${userId}`;
             });
     }
 
@@ -762,7 +779,7 @@ $usersList = db_fetch_all($sql, $params);
         if (btn) {
             toggleStatus(userId, btn);
         } else {
-            window.location.href = `kelola-pengguna.php?action=toggle&id=${userId}`;
+            window.location.href = `kelola-pengguna.php?action=toggle&csrf_token=<?= urlencode(csrf_token()) ?>&id=${userId}`;
         }
     }
 
@@ -807,7 +824,7 @@ $usersList = db_fetch_all($sql, $params);
             if (btn) {
                 toggleStatus(currentDetailUser.id, btn);
             } else {
-                window.location.href = `kelola-pengguna.php?action=toggle&id=${currentDetailUser.id}`;
+                window.location.href = `kelola-pengguna.php?action=toggle&csrf_token=<?= urlencode(csrf_token()) ?>&id=${currentDetailUser.id}`;
             }
         }
     }

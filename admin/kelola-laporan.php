@@ -3,6 +3,9 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/data.php';
 
+// Wajib login admin/petugas SEBELUM handler apa pun dijalankan.
+require_admin('../masuk.php');
+
 // Handle Status Change
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
     $itemId = intval($_POST['item_id']);
@@ -15,6 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 
 // Handle Delete
 if (isset($_GET['delete'])) {
+    require_csrf();
     $delId = intval($_GET['delete']);
     db_execute("DELETE FROM items WHERE id = ?", [$delId]);
     set_flash_message('info', 'Laporan barang berhasil dihapus dari sistem.');
@@ -145,6 +149,7 @@ $categories = get_categories();
                                     </td>
                                     <td class="py-4 px-5">
                                         <form action="kelola-laporan.php" method="POST" class="inline-flex items-center gap-1.5">
+                <?= csrf_field() ?>
                                             <input type="hidden" name="update_status" value="1">
                                             <input type="hidden" name="item_id" value="<?= $it['id'] ?>">
                                             <select name="new_status" class="input-default text-xs py-1 px-2.5 bg-white border-slate-200">
@@ -164,7 +169,7 @@ $categories = get_categories();
                                             <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                             <span>Lihat</span>
                                         </a>
-                                        <a href="kelola-laporan.php?delete=<?= $it['id'] ?>" onclick="return confirm('Apakah Anda yakin ingin menghapus barang ini secara permanen?')" class="h-8 px-2.5 rounded-btn bg-red-50 hover:bg-red-100 text-red-600 text-xs font-medium inline-flex items-center gap-1">
+                                        <a href="<?= csrf_link("kelola-laporan.php?delete=" . $it['id']) ?>" onclick="return confirm('Apakah Anda yakin ingin menghapus barang ini secara permanen?')" class="h-8 px-2.5 rounded-btn bg-red-50 hover:bg-red-100 text-red-600 text-xs font-medium inline-flex items-center gap-1">
                                             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                             <span>Hapus</span>
                                         </a>

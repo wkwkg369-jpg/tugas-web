@@ -34,6 +34,7 @@ if (!$item) {
 
         <!-- Form -->
         <form action="klaim-berhasil.php" method="POST" enctype="multipart/form-data" class="p-6 space-y-4">
+                <?= csrf_field() ?>
             <input type="hidden" name="item_id" value="<?= $item['id'] ?>">
 
             <!-- Item Banner -->

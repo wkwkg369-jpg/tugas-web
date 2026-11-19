@@ -3,6 +3,9 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/data.php';
 
+// Wajib login admin/petugas SEBELUM handler apa pun dijalankan.
+require_admin('../masuk.php');
+
 $successReceipt = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -129,7 +132,7 @@ $availableItems = db_fetch_all("SELECT * FROM items WHERE status IN ('Ditemukan'
                     </div>
                     <div>
                         <h2 class="text-base font-bold text-slate-900">Berita Acara Serah Terima Resmi Terbit</h2>
-                        <p class="text-xs text-slate-500">Nomor Registrasi: <span class="font-mono font-bold text-emerald-700"><?= $successReceipt['no_ba'] ?></span></p>
+                        <p class="text-xs text-slate-500">Nomor Registrasi: <span class="font-mono font-bold text-emerald-700"><?= htmlspecialchars($successReceipt['no_ba']) ?></span></p>
                     </div>
                 </div>
 
@@ -168,6 +171,7 @@ $availableItems = db_fetch_all("SELECT * FROM items WHERE status IN ('Ditemukan'
         <!-- Form Serah Terima (Figma: Form Serah Terima) -->
         <div class="card-default p-6 sm:p-8 bg-white rounded-card border border-slate-200 shadow-sm">
             <form action="catat-penyerahan.php" method="POST" class="space-y-5">
+                <?= csrf_field() ?>
                 
                 <!-- Pilih Barang -->
                 <div>

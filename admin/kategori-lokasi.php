@@ -3,6 +3,9 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/data.php';
 
+// Wajib login admin/petugas SEBELUM handler apa pun dijalankan.
+require_admin('../masuk.php');
+
 $activeSubTab = $_GET['tab'] ?? 'kategori';
 if (!in_array($activeSubTab, ['kategori', 'lokasi'])) {
     $activeSubTab = 'kategori';
@@ -407,6 +410,7 @@ $locationsList = [
             </div>
         </div>
         <form method="POST" action="kategori-lokasi.php?tab=lokasi" class="space-y-4">
+                <?= csrf_field() ?>
             <input type="hidden" name="action" value="edit_lokasi">
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nama Lokasi</label>
@@ -451,6 +455,7 @@ $locationsList = [
             </div>
         </div>
         <form method="POST" action="kategori-lokasi.php?tab=lokasi" class="space-y-4">
+                <?= csrf_field() ?>
             <input type="hidden" name="action" value="tambah_lokasi">
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nama Titik Lokasi</label>
@@ -486,6 +491,7 @@ $locationsList = [
             </div>
         </div>
         <form method="POST" action="kategori-lokasi.php?tab=kategori" class="space-y-4">
+                <?= csrf_field() ?>
             <input type="hidden" name="action" value="edit_kategori">
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nama Kategori</label>
@@ -521,6 +527,7 @@ $locationsList = [
             </div>
         </div>
         <form method="POST" action="kategori-lokasi.php?tab=kategori" class="space-y-4">
+                <?= csrf_field() ?>
             <input type="hidden" name="action" value="tambah_kategori">
             <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nama Kategori</label>

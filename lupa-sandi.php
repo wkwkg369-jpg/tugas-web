@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'email' => $email,
             'code' => $otp
         ];
-        set_flash_message('success', 'Kode reset kata sandi telah dikirim ke ' . $email . '. (Kode demo: ' . $otp . ')');
+        set_flash_message('success', 'Jika email tersebut terdaftar, kode reset kata sandi telah dikirim. Periksa kotak masuk email kampus Anda.');
         header('Location: verifikasi-otp.php?email=' . urlencode($email));
         exit;
     }
@@ -38,6 +38,7 @@ require_once __DIR__ . '/includes/navbar.php';
         </p>
 
         <form action="lupa-sandi.php" method="POST" class="mt-6 space-y-4 text-left">
+                <?= csrf_field() ?>
             <div>
                 <label class="block text-xs md:text-sm font-bold text-slate-900 mb-1.5">
                     Email Kampus

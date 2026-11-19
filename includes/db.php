@@ -280,7 +280,12 @@ class Database {
     private static function seedData(PDO $pdo): void {
         // 1. Seed Users
         $defaultPassword = password_hash('password123', PASSWORD_DEFAULT);
-        $adminPassword = password_hash('admin123', PASSWORD_DEFAULT);
+        // Jangan pernah memakai kata sandi admin yang bisa ditebak.
+        $adminSeed = getenv('SIP_ADMIN_PASSWORD');
+        if (!is_string($adminSeed) || strlen($adminSeed) < 12) {
+            $adminSeed = bin2hex(random_bytes(12));
+        }
+        $adminPassword = password_hash($adminSeed, PASSWORD_DEFAULT);
 
         $users = [
             [

@@ -38,20 +38,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errorKlaim = 'Barang ini tidak lagi dapat diklaim (status: ' . $item['status'] . ').';
     }
 
-    // Upload bukti pendukung
+    // Upload bukti pendukung (opsional, divalidasi ekstensi + isi berkas)
     $buktiFilename = null;
-    if ($errorKlaim === '' && isset($_FILES['bukti_klaim']) && $_FILES['bukti_klaim']['error'] === UPLOAD_ERR_OK) {
-        $tmpName = $_FILES['bukti_klaim']['tmp_name'];
-        $origName = basename($_FILES['bukti_klaim']['name']);
-        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'pdf'])) {
-            $buktiFilename = 'proof_' . date('Ymd_His') . '_' . random_int(100, 999) . '.' . $ext;
-            if (!move_uploaded_file($tmpName, __DIR__ . '/assets/uploads/' . $buktiFilename)) {
+    if ($errorKlaim === '' && isset($_FILES['bukti_klaim']) && $_FILES['bukti_klaim']['error'] !== UPLOAD_ERR_NO_FILE) {
+        $cekBukti = validate_upload($_FILES['bukti_klaim'], ['jpg', 'jpeg', 'png', 'webp', 'pdf'], 5 * 1024 * 1024);
+        if ($cekBukti['ok']) {
+            $buktiFilename = 'proof_' . date('Ymd_His') . '_' . random_int(100, 999) . '.' . $cekBukti['ext'];
+            if (!move_uploaded_file($_FILES['bukti_klaim']['tmp_name'], ensure_upload_dir() . '/' . $buktiFilename)) {
                 $buktiFilename = null;
                 $errorKlaim = 'Bukti pendukung gagal disimpan. Silakan coba lagi tanpa lampiran.';
             }
         } else {
-            $errorKlaim = 'Format bukti harus JPG, PNG, WEBP, atau PDF.';
+            $errorKlaim = $cekBukti['error'];
         }
     }
 

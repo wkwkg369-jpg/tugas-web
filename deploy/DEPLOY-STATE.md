@@ -31,12 +31,24 @@ browser ──TLS(Let's Encrypt)──> edge Cloudra 103.155.224.225:443
 - `/etc/nginx/sites-available/arialfian.my.id` — vhost 8443 (TLS) + 8081/8080 (HTTP)
 - `libnginx-mod-stream` terpasang untuk `ssl_preread`
 
-## Akun demo (bawaan repo)
+## Akun admin
 
-| Peran | Login | Kata sandi |
-|---|---|---|
-| Mahasiswa | `budi.pratama@ui.ac.id` atau `2024080123` | `password123` |
-| Admin / Petugas | `admin@ui.ac.id` | `admin123` |
+Kata sandi admin **tidak** ditulis di repo/dokumen. Kata sandi hasil pengamanan
+disimpan hanya di server: `/root/sip-admin-password.txt` (mode 600). Ganti segera
+setelah masuk dan hapus berkas itu.
+
+## Pengerasan keamanan (audit 19 Nov 2026)
+
+- Nginx memblokir `/includes/`, `/sessions/`, `/deploy/`, `/ui/`, dotfile,
+  serta berkas `.sqlite/.sql/.md/.log/.sh/.bat/.env` (dulu database & `.git` bisa diunduh publik).
+- Semua handler admin mewajibkan login sebelum memproses aksi (dulu tambah/hapus
+  pengguna dan verifikasi laporan bisa dipanggil tanpa login).
+- Token CSRF di semua form POST dan aksi tautan (setujui/tolak/hapus/toggle).
+- Kode OTP cadangan `123456`/`482901` dihapus; OTP tidak lagi ditampilkan di layar.
+- Login: hanya hash password, batas 5 percobaan/15 menit, cek akun nonaktif,
+  regenerasi ID sesi; cookie HttpOnly/SameSite/Secure.
+- Unggahan divalidasi ekstensi + MIME + ukuran; laporan tamu tidak lagi
+  meminjam identitas akun mahasiswa.
 
 ## Hasil uji (lewat domain publik)
 

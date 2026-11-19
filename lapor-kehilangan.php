@@ -30,16 +30,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Handle File Upload
+        // Handle File Upload (divalidasi ekstensi + isi berkas)
         $fotoFilename = null;
-        if (isset($_FILES['foto_barang']) && $_FILES['foto_barang']['error'] === UPLOAD_ERR_OK) {
-            $tmpName = $_FILES['foto_barang']['tmp_name'];
-            $origName = basename($_FILES['foto_barang']['name']);
-            $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-            if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-                $fotoFilename = 'lost_' . time() . '_' . random_int(100, 999) . '.' . $ext;
-                $targetPath = __DIR__ . '/assets/uploads/' . $fotoFilename;
-                move_uploaded_file($tmpName, $targetPath);
+        if (isset($_FILES['foto_barang']) && $_FILES['foto_barang']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $cek = validate_upload($_FILES['foto_barang'], ['jpg', 'jpeg', 'png', 'webp'], 5 * 1024 * 1024);
+            if ($cek['ok']) {
+                $fotoFilename = 'lost_' . time() . '_' . random_int(100, 999) . '.' . $cek['ext'];
+                $targetPath = ensure_upload_dir() . '/' . $fotoFilename;
+                if (!move_uploaded_file($_FILES['foto_barang']['tmp_name'], $targetPath)) {
+                    $fotoFilename = null;
+                    $errorMessage = 'Foto gagal disimpan di server. Silakan coba lagi.';
+                }
+            } else {
+                $errorMessage = $cek['error'];
             }
         }
 
@@ -57,10 +60,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
         $icon = $iconMap[$slug] ?? 'package';
 
-        $pelaporId = $user ? $user['id'] : 1;
-        $pelaporNama = $user ? ($user['nama'] . ' (Mahasiswa)') : 'Budi Pratama (Mahasiswa)';
+        // Tamu tidak dipinjamkan identitas akun lain.
+        $pelaporId = $user ? (int) $user['id'] : null;
+        $pelaporNama = $user ? ($user['nama'] . ' (Mahasiswa)') : 'Tamu (belum masuk)';
         // Notifikasi hanya untuk pengguna yang benar-benar login (tamu tidak dipinjami akun lain)
         $notifyUid = $user ? (int) $user['id'] : 0;
+
+        if (!empty($errorMessage)) {
+            // Validasi unggahan gagal: jangan simpan laporan.
+        } else {
 
         $sql = "INSERT INTO items (
             kode, nama, kategori, kategori_slug, status, jenis_laporan, lokasi, lokasi_singkat,
@@ -109,6 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $errorMessage = 'Gagal menyimpan laporan. Silakan periksa kembali data Anda.';
         }
+        }
     }
 }
 
@@ -151,6 +160,7 @@ require_once __DIR__ . '/includes/navbar.php';
             <?php endif; ?>
 
             <form action="lapor-kehilangan.php" method="POST" enctype="multipart/form-data" class="space-y-6">
+                <?= csrf_field() ?>
                 
                 <!-- 2 Kolom: Nama Barang & Kategori Barang -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

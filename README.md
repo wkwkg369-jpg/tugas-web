@@ -55,16 +55,14 @@ Aplikasi dilengkapi modul database pintar di `includes/db.php`:
 
 ---
 
-## 🔑 Akun Demo Siap Pakai
+## 🔑 Akun Awal
 
-Tersedia akun bawaan untuk kemudahan pengujian:
+Kredensial bawaan tidak lagi ditulis di dokumen maupun ditampilkan di halaman masuk.
+Saat instalasi baru, kata sandi admin diambil dari variabel lingkungan
+`SIP_ADMIN_PASSWORD`; bila tidak diisi, sistem membuat kata sandi acak yang tidak
+diketahui siapa pun. Minta admin mengganti kata sandi setelah masuk pertama kali.
 
-| Peran (Role) | Email / NIM | Kata Sandi | Akses |
-|---|---|---|---|
-| **Mahasiswa** | `budi.pratama@ui.ac.id` atau `2024080123` | `password123` | Halaman Mahasiswa, Lapor, Klaim, Riwayat, Notifikasi |
-| **Admin / Petugas** | `admin@ui.ac.id` | `admin123` | Dashboard Admin, Verifikasi Laporan, Verifikasi Klaim, Penyerahan, Rekap |
-
-> 💡 *Pada halaman `masuk.php` juga telah disediakan tombol "Akun Demo Cepat" untuk mengisi form hanya dengan 1 kali klik.*
+> Untuk produksi, wajib ganti kata sandi akun contoh dan aktifkan HTTPS.
 
 ---
 

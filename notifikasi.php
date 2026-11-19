@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/header.php';
 
 // Handle mark all as read
 if (isset($_GET['action']) && $_GET['action'] === 'read_all') {
+    require_csrf();
     mark_all_notifications_read();
     set_flash_message('success', 'Semua notifikasi telah ditandai sudah dibaca.');
     header('Location: notifikasi.php');
@@ -28,7 +29,7 @@ require_once __DIR__ . '/includes/navbar.php';
                     Informasi terkini mengenai perkembangan laporan dan klaim barang Anda.
                 </p>
             </div>
-            <a href="notifikasi.php?action=read_all" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
+            <a href="<?= csrf_link("notifikasi.php?action=read_all") ?>" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
                 <i data-lucide="check-check" class="w-4 h-4"></i>
                 <span>Tandai semua dibaca</span>
             </a>

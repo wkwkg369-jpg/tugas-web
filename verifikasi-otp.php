@@ -19,13 +19,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expectedOtp = $_SESSION['pending_otp']['code'] ?? null;
     $dbOtp = db_fetch_one("SELECT * FROM otp_codes WHERE email = ? AND is_used = 0 ORDER BY id DESC LIMIT 1", [$email]);
 
-    if ($dbOtp && ($enteredCode === $dbOtp['code'] || $enteredCode === '123456' || $enteredCode === '482901')) {
-        // Mark used
-        db_execute("UPDATE otp_codes SET is_used = 1 WHERE id = ?", [$dbOtp['id']]);
+    // Batasi 5 percobaan per sesi agar kode 6 digit tidak bisa ditebak.
+    $_SESSION['otp_attempts'] = (int) ($_SESSION['otp_attempts'] ?? 0) + 1;
+
+    if ($_SESSION['otp_attempts'] > 5) {
+        $state = 'salah';
+        $errorMessage = 'Terlalu banyak percobaan. Minta kode baru lalu coba lagi.';
+    } elseif ($enteredCode !== '' && $dbOtp && hash_equals((string) $dbOtp['code'], $enteredCode)) {
+        // Kode yang benar hanya berasal dari database / sesi; tidak ada kode cadangan.
+        db_execute("UPDATE otp_codes SET is_used = 1 WHERE email = ? AND is_used = 0", [$email]);
+        unset($_SESSION['pending_otp'], $_SESSION['otp_attempts']);
         $state = 'berhasil';
-    } elseif ($expectedOtp && $enteredCode === $expectedOtp) {
-        $state = 'berhasil';
-    } elseif ($enteredCode === '123456' || $enteredCode === '482901') {
+    } elseif ($expectedOtp && $enteredCode !== '' && hash_equals((string) $expectedOtp, $enteredCode)) {
+        unset($_SESSION['pending_otp'], $_SESSION['otp_attempts']);
         $state = 'berhasil';
     } else {
         $state = 'salah';
@@ -115,13 +121,14 @@ require_once __DIR__ . '/includes/header.php';
 
             <!-- 6 Digit Error Inputs -->
             <form action="verifikasi-otp.php?email=<?= urlencode($email) ?>" method="POST" class="mt-6 space-y-4">
+                <?= csrf_field() ?>
                 <div class="flex items-center justify-center gap-2 sm:gap-3">
-                    <input type="text" name="digits[]" maxlength="1" value="4" class="otp-input otp-digit error" autofocus>
-                    <input type="text" name="digits[]" maxlength="1" value="8" class="otp-input otp-digit error">
-                    <input type="text" name="digits[]" maxlength="1" value="2" class="otp-input otp-digit error">
-                    <input type="text" name="digits[]" maxlength="1" value="9" class="otp-input otp-digit error">
-                    <input type="text" name="digits[]" maxlength="1" value="0" class="otp-input otp-digit error">
-                    <input type="text" name="digits[]" maxlength="1" value="1" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error" autofocus>
+                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
                 </div>
 
                 <!-- Error Message Alert -->
@@ -162,13 +169,14 @@ require_once __DIR__ . '/includes/header.php';
             </p>
 
             <?php if (isset($_SESSION['pending_otp']['code'])): ?>
-                <div class="mt-3 p-2 bg-blue-50 text-blue-700 text-xs rounded-btn font-mono">
-                    Kode simulasi: <strong><?= htmlspecialchars($_SESSION['pending_otp']['code']) ?></strong>
+                <div class="mt-3 p-2 bg-blue-50 text-blue-700 text-xs rounded-btn">
+                    Kode dikirim ke email kampus Anda. Kode tidak ditampilkan di halaman ini.
                 </div>
             <?php endif; ?>
 
             <!-- 6 Digit Inputs -->
             <form id="otpForm" action="verifikasi-otp.php?email=<?= urlencode($email) ?>" method="POST" class="mt-6 space-y-5">
+                <?= csrf_field() ?>
                 <div class="flex items-center justify-center gap-2 sm:gap-3">
                     <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit" autofocus>
                     <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit">

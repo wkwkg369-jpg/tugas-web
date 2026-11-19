@@ -12,12 +12,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $lokasi_penemuan = trim($_POST['lokasi_penemuan'] ?? '');
     $waktu_raw = trim($_POST['waktu_penemuan'] ?? '');
     $tempat_simpan = trim($_POST['tempat_simpan'] ?? '');
+    $ciri_khusus = trim($_POST['ciri_khusus'] ?? '');
     $deskripsi_tambahan = trim($_POST['deskripsi_tambahan'] ?? '');
 
     $fotoError = $_FILES['foto_temuan']['error'] ?? UPLOAD_ERR_NO_FILE;
 
     if (empty($nama_barang) || empty($jenis_barang) || empty($lokasi_penemuan) || empty($tempat_simpan)) {
         $errorMessage = 'Semua kolom bertanda bintang (*) wajib diisi.';
+    } elseif (empty($ciri_khusus)) {
+        $errorMessage = 'Ciri khusus / bukti rahasia wajib diisi agar petugas dapat memverifikasi pemilik barang.';
     } elseif (mb_strlen($nama_barang) < 3) {
         $errorMessage = 'Nama barang yang ditemukan minimal 3 karakter.';
     } elseif ($fotoError === UPLOAD_ERR_NO_FILE) {
@@ -53,17 +56,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $icon = 'backpack';
         }
 
-        // Handle File Upload (WAJIB)
+        // Handle File Upload (WAJIB, divalidasi ekstensi + isi berkas)
         $fotoFilename = null;
-        $tmpName = $_FILES['foto_temuan']['tmp_name'];
-        $origName = basename($_FILES['foto_temuan']['name']);
-        $ext = strtolower(pathinfo($origName, PATHINFO_EXTENSION));
-        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
-            $errorMessage = 'Format foto harus JPG, PNG, atau WEBP.';
+        $cekFoto = validate_upload($_FILES['foto_temuan'], ['jpg', 'jpeg', 'png', 'webp'], 5 * 1024 * 1024);
+        if (!$cekFoto['ok']) {
+            $errorMessage = $cekFoto['error'];
         } else {
-            $fotoFilename = 'found_' . time() . '_' . random_int(100, 999) . '.' . $ext;
-            $targetPath = __DIR__ . '/assets/uploads/' . $fotoFilename;
-            if (!move_uploaded_file($tmpName, $targetPath)) {
+            $fotoFilename = 'found_' . time() . '_' . random_int(100, 999) . '.' . $cekFoto['ext'];
+            $targetPath = ensure_upload_dir() . '/' . $fotoFilename;
+            if (!move_uploaded_file($_FILES['foto_temuan']['tmp_name'], $targetPath)) {
                 $fotoFilename = null;
                 $errorMessage = 'Foto gagal disimpan di server. Silakan coba lagi.';
             }
@@ -74,8 +75,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
 
         $kode = 'TRX-' . random_int(88220, 88999);
-        $pelaporId = $user ? $user['id'] : 1;
-        $pelaporNama = $user ? ($user['nama'] . ' (Mahasiswa)') : 'Budi Pratama (Mahasiswa)';
+        // Tamu tidak dipinjamkan identitas akun lain.
+        $pelaporId = $user ? (int) $user['id'] : null;
+        $pelaporNama = $user ? ($user['nama'] . ' (Mahasiswa)') : 'Tamu (belum masuk)';
         // Notifikasi hanya untuk pengguna yang benar-benar login (tamu tidak dipinjami akun lain)
         $notifyUid = $user ? (int) $user['id'] : 0;
 
@@ -86,9 +88,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $sql = "INSERT INTO items (
             kode, nama, kategori, kategori_slug, status, jenis_laporan, lokasi, lokasi_singkat,
-            waktu_kejadian, deskripsi, ciri_umum, tempat_simpan, pelapor_id,
+            waktu_kejadian, deskripsi, ciri_umum, ciri_khusus, tempat_simpan, pelapor_id,
             pelapor_nama, pelapor_tipe, foto, icon, warna_placeholder, is_verified
-        ) VALUES (?, ?, ?, ?, 'Dalam Verifikasi', 'temuan', ?, ?, ?, ?, ?, ?, ?, ?, 'Mahasiswa', ?, ?, '#d1fae5', 0)";
+        ) VALUES (?, ?, ?, ?, 'Dalam Verifikasi', 'temuan', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Mahasiswa', ?, ?, '#d1fae5', 0)";
 
         $ok = db_execute($sql, [
             $kode,
@@ -100,6 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $waktuFormatted,
             $deskripsi,
             $deskripsi,
+            $ciri_khusus,
             $tempat_simpan,
             $pelaporId,
             $pelaporNama,
@@ -174,6 +177,7 @@ require_once __DIR__ . '/includes/navbar.php';
             <?php endif; ?>
 
             <form action="lapor-temuan.php" method="POST" enctype="multipart/form-data" class="space-y-6" onsubmit="return cekFotoTemuan(this)">
+                <?= csrf_field() ?>
 
                 <!-- Nama Barang yang Ditemukan -->
                 <div>
@@ -297,6 +301,26 @@ require_once __DIR__ . '/includes/navbar.php';
                         </select>
                     </div>
                     <p class="text-[11px] text-slate-400 mt-1">Sangat disarankan untuk menitipkan barang berharga di pos keamanan terdekat.</p>
+                </div>
+
+                <!-- Ciri Khusus / Bukti Rahasia (Tidak Tampil di Publik) -->
+                <div>
+                    <label for="ciri_khusus" class="label-default flex items-center gap-1.5">
+                        <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-600"></i>
+                        Ciri Khusus / Bukti Rahasia <span class="text-red-500">*</span>
+                    </label>
+                    <textarea
+                        id="ciri_khusus"
+                        name="ciri_khusus"
+                        rows="3"
+                        required
+                        class="input-default resize-none leading-relaxed"
+                        placeholder="Contoh: stiker bulat di bagian bawah botol, goresan halus di sudut tutup, nomor seri di dalam casing..."
+                    ><?= htmlspecialchars($_POST['ciri_khusus'] ?? '') ?></textarea>
+                    <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5 mt-1.5 flex items-start gap-1.5">
+                        <i data-lucide="eye-off" class="w-3.5 h-3.5 shrink-0 mt-0.5"></i>
+                        <span>Disembunyikan dari publik. Hanya Anda, petugas keamanan, dan admin yang dapat melihat isi kolom ini saat verifikasi.</span>
+                    </p>
                 </div>
 
                 <!-- Submit Button -->

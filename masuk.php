@@ -82,6 +82,7 @@ require_once __DIR__ . '/includes/navbar.php';
                     <?php endif; ?>
 
                     <form action="masuk.php" method="POST" class="space-y-4">
+                <?= csrf_field() ?>
                         
                         <!-- Input User (Email / NIM) -->
                         <div>
@@ -146,22 +147,6 @@ require_once __DIR__ . '/includes/navbar.php';
                             </button>
                         </div>
 
-                        <!-- Quick Demo Credentials Box -->
-                        <div class="p-3 bg-slate-50 rounded-btn border border-slate-200/80 text-xs text-slate-600">
-                            <span class="font-bold text-slate-800 block mb-1.5 flex items-center gap-1.5">
-                                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-primary"></i>
-                                <span>Akun Demo Cepat (Klik untuk mengisi):</span>
-                            </span>
-                            <div class="flex flex-wrap gap-2">
-                                <button type="button" onclick="fillDemo('budi.pratama@ui.ac.id', 'password123')" class="px-2.5 py-1 rounded bg-white border border-slate-200 hover:border-primary text-slate-700 hover:text-primary font-medium transition-colors">
-                                    👨‍🎓 Mahasiswa (Budi)
-                                </button>
-                                <button type="button" onclick="fillDemo('admin@ui.ac.id', 'admin123')" class="px-2.5 py-1 rounded bg-white border border-slate-200 hover:border-blue-600 text-slate-700 hover:text-blue-600 font-medium transition-colors">
-                                    👮‍♂️ Petugas / Admin
-                                </button>
-                            </div>
-                        </div>
-
                         <!-- Register Redirect Link -->
                         <div class="text-center pt-2 text-xs sm:text-sm text-slate-500">
                             Belum punya akun? 
@@ -180,11 +165,6 @@ require_once __DIR__ . '/includes/navbar.php';
     </div>
 </main>
 
-<script>
-function fillDemo(user, pass) {
-    document.getElementById('loginUsername').value = user;
-    document.getElementById('loginPassword').value = pass;
-}
-</script>
+
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

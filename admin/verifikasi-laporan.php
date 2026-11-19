@@ -3,8 +3,12 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/data.php';
 
+// Wajib login admin/petugas SEBELUM handler apa pun dijalankan.
+require_admin('../masuk.php');
+
 // Handle Action (Approve / Reject)
 if (isset($_GET['action']) && isset($_GET['id'])) {
+    require_csrf(); // aksi lewat tautan tetap wajib membawa token CSRF
     $action = $_GET['action'];
     $itemId = intval($_GET['id']);
     $item = get_item_by_id($itemId);
@@ -148,6 +152,7 @@ $items = db_fetch_all($sql, $params);
                         <tr>
                             <th class="py-3.5 px-5">KODE</th>
                             <th class="py-3.5 px-5">NAMA BARANG</th>
+                            <th class="py-3.5 px-5">CIRI KHUSUS <span class="text-amber-600">(RAHASIA)</span></th>
                             <th class="py-3.5 px-5">PELAPOR</th>
                             <th class="py-3.5 px-5">LOKASI & WAKTU</th>
                             <th class="py-3.5 px-5">STATUS LAPORAN</th>
@@ -157,7 +162,7 @@ $items = db_fetch_all($sql, $params);
                     <tbody class="divide-y divide-slate-100">
                         <?php if (empty($items)): ?>
                             <tr>
-                                <td colspan="6" class="p-8 text-center text-slate-400">
+                                <td colspan="7" class="p-8 text-center text-slate-400">
                                     <div class="flex flex-col items-center justify-center gap-2">
                                         <i data-lucide="inbox" class="w-8 h-8 text-slate-300"></i>
                                         <span>Tidak ada laporan yang sesuai dengan filter kriteria saat ini.</span>
@@ -178,6 +183,29 @@ $items = db_fetch_all($sql, $params);
                                         <div class="font-bold text-slate-900"><?= htmlspecialchars($it['nama']) ?></div>
                                         <span class="text-xs text-slate-400"><?= htmlspecialchars($it['kategori']) ?></span>
                                     </td>
+                                    <td class="py-4 px-5 align-top">
+                                        <?php if (!empty($it['ciri_khusus'])): ?>
+                                            <div class="max-w-[260px] p-2.5 rounded-lg bg-amber-50 border border-amber-200">
+                                                <div class="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-700 mb-1">
+                                                    <i data-lucide="lock" class="w-3 h-3"></i>
+                                                    <span>Rahasia</span>
+                                                </div>
+                                                <p class="text-xs text-amber-900 leading-relaxed whitespace-pre-line"><?= htmlspecialchars($it['ciri_khusus']) ?></p>
+                                            </div>
+                                        <?php else: ?>
+                                            <span class="text-[11px] text-slate-400 italic">Tidak diisi</span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($it['ciri_umum'])): ?>
+                                            <details class="mt-1.5">
+                                                <summary class="text-[11px] text-primary cursor-pointer hover:underline">Ciri umum &amp; deskripsi</summary>
+                                                <p class="text-[11px] text-slate-600 mt-1 leading-relaxed max-w-[260px]">
+                                                    <strong>Ciri umum:</strong> <?= htmlspecialchars($it['ciri_umum']) ?><br>
+                                                    <strong>Deskripsi:</strong> <?= htmlspecialchars($it['deskripsi'] ?? '-') ?><br>
+                                                    <strong>Tempat simpan:</strong> <?= htmlspecialchars($it['tempat_simpan'] ?: '-') ?>
+                                                </p>
+                                            </details>
+                                        <?php endif; ?>
+                                    </td>
                                     <td class="py-4 px-5">
                                         <div class="text-xs font-semibold text-slate-800"><?= htmlspecialchars($it['pelapor_nama']) ?></div>
                                         <span class="text-[11px] text-slate-400"><?= htmlspecialchars($it['pelapor_tipe'] ?? 'Mahasiswa') ?></span>
@@ -196,11 +224,11 @@ $items = db_fetch_all($sql, $params);
                                         </a>
 
                                         <?php if ($isPending): ?>
-                                            <a href="verifikasi-laporan.php?action=approve&id=<?= $it['id'] ?>" class="h-8 px-2.5 rounded-btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold inline-flex items-center gap-1 shadow-sm transition-colors">
+                                            <a href="<?= csrf_link("verifikasi-laporan.php?action=approve&id=" . $it['id']) ?>" class="h-8 px-2.5 rounded-btn bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold inline-flex items-center gap-1 shadow-sm transition-colors">
                                                 <i data-lucide="check" class="w-3.5 h-3.5"></i>
                                                 <span>Setujui</span>
                                             </a>
-                                            <a href="verifikasi-laporan.php?action=reject&id=<?= $it['id'] ?>" onclick="return confirm('Apakah Anda yakin ingin menolak dan menutup laporan ini?')" class="h-8 px-2.5 rounded-btn bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold inline-flex items-center gap-1 transition-colors">
+                                            <a href="<?= csrf_link("verifikasi-laporan.php?action=reject&id=" . $it['id']) ?>" onclick="return confirm('Apakah Anda yakin ingin menolak dan menutup laporan ini?')" class="h-8 px-2.5 rounded-btn bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold inline-flex items-center gap-1 transition-colors">
                                                 <i data-lucide="x" class="w-3.5 h-3.5"></i>
                                                 <span>Tolak</span>
                                             </a>

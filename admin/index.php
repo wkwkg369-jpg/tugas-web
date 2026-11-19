@@ -71,7 +71,9 @@ try {
             'badge_class' => 'bg-amber-50 text-amber-600',
             'btn_text' => 'Cek Klaim',
             'btn_url' => 'verifikasi-klaim.php?id=' . $cl['id'],
-            'type' => 'klaim'
+            'type' => 'klaim',
+            'secret' => trim((string) ($cl['jawaban_verifikasi'] ?? '')),
+            'secret_label' => 'Ciri khusus pengklaim'
         ];
     }
 } catch (Throwable $e) {}
@@ -94,7 +96,9 @@ if (count($urgentList) < 5) {
                 'badge_class' => $isHilang ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600',
                 'btn_text' => 'Verifikasi',
                 'btn_url' => 'verifikasi-laporan.php?id=' . $it['id'],
-                'type' => 'laporan'
+                'type' => 'laporan',
+                'secret' => trim((string) ($it['ciri_khusus'] ?? '')),
+                'secret_label' => 'Ciri khusus'
             ];
         }
     } catch (Throwable $e) {}
@@ -240,6 +244,12 @@ if (count($urgentList) < 5) {
                                     <div class="min-w-0 pr-3">
                                         <h3 class="text-sm font-semibold text-slate-900 truncate"><?= htmlspecialchars($item['title']) ?></h3>
                                         <p class="text-xs text-slate-400 truncate mt-0.5"><?= htmlspecialchars($item['subtitle']) ?></p>
+                                        <?php if (!empty($item['secret'])): ?>
+                                            <p class="mt-1.5 max-w-[460px] text-[11px] leading-snug text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                                                <span class="font-bold uppercase tracking-wider text-[9px] text-amber-700"><?= htmlspecialchars($item['secret_label']) ?>:</span>
+                                                <?= htmlspecialchars($item['secret']) ?>
+                                            </p>
+                                        <?php endif; ?>
                                     </div>
                                     <div class="shrink-0 flex items-center gap-3">
                                         <span class="text-xs font-semibold px-3 py-1 rounded-full <?= $item['badge_class'] ?>">

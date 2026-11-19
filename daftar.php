@@ -8,7 +8,7 @@ $errorMessage = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $res = register_user($_POST);
     if ($res['success']) {
-        set_flash_message('success', 'Kode OTP pendaftaran Anda telah dibuat: ' . $res['otp']);
+        set_flash_message('success', 'Pendaftaran berhasil. Periksa email kampus Anda untuk kode verifikasi.');
         header('Location: verifikasi-otp.php?email=' . urlencode($_POST['email']));
         exit;
     } else {
@@ -68,6 +68,7 @@ require_once __DIR__ . '/includes/navbar.php';
                     <?php endif; ?>
 
                     <form action="daftar.php" method="POST" class="space-y-4">
+                <?= csrf_field() ?>
                         
                         <!-- 2 Kolom: Nama Lengkap & NIM -->
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

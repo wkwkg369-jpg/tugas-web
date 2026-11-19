@@ -3,6 +3,9 @@ require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/data.php';
 
+// Wajib login admin/petugas SEBELUM handler apa pun dijalankan.
+require_admin('../masuk.php');
+
 // Handle Claim Decisions (POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $claimId = intval($_POST['claim_id'] ?? 0);
@@ -208,6 +211,7 @@ $allClaims = db_fetch_all("SELECT c.*, i.nama as item_nama FROM claims c JOIN it
             <!-- Action Box: Keputusan Petugas matching Figma -->
             <div class="card-default p-6 bg-white rounded-card border border-slate-200 shadow-sm">
                 <form action="verifikasi-klaim.php" method="POST" class="space-y-4">
+                <?= csrf_field() ?>
                     <input type="hidden" name="claim_id" value="<?= $claim['id'] ?>">
 
                     <div>
