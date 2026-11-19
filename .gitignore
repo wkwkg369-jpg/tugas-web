@@ -31,3 +31,6 @@ composer.phar
 /sessions/sess_*
 /assets/uploads/*
 !/assets/uploads/.gitkeep
+
+# database runtime tidak boleh ikut repo publik
+includes/sip_barang.sqlite
