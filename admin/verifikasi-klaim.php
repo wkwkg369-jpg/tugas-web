@@ -1,8 +1,7 @@
 <?php
-$page_title = 'Verifikasi Klaim - SIP-Barang Admin';
-$active_tab = 'verifikasi_klaim';
-require_once __DIR__ . '/includes/admin_header.php';
-require_once __DIR__ . '/includes/admin_sidebar.php';
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/data.php';
 
 // Handle Claim Decisions (POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -40,6 +39,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Location: verifikasi-klaim.php');
     exit;
 }
+
+$page_title = 'Verifikasi Klaim - SIP-Barang Admin';
+$active_tab = 'verifikasi_klaim';
+require_once __DIR__ . '/includes/admin_header.php';
+require_once __DIR__ . '/includes/admin_sidebar.php';
 
 // Fetch Pending Claim (or selected claim)
 $claimId = isset($_GET['id']) ? intval($_GET['id']) : 0;

@@ -24,7 +24,7 @@ if (!isset($active_tab)) {
 $flash = get_flash_message();
 ?>
 <!DOCTYPE html>
-<html lang="id" class="h-full bg-slate-100">
+<html lang="id" class="h-full bg-[#F8FAFC]">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -56,7 +56,7 @@ $flash = get_flash_message();
                     },
                     borderRadius: {
                         'btn': '10px',
-                        'card': '14px',
+                        'card': '16px',
                     }
                 }
             }
@@ -65,5 +65,5 @@ $flash = get_flash_message();
     <link rel="stylesheet" href="../assets/css/style.css">
     <script src="../assets/vendor/lucide.min.js"></script>
 </head>
-<body class="min-h-full flex flex-col font-sans bg-slate-100 text-slate-900 antialiased">
+<body class="min-h-full flex flex-col font-sans bg-[#F8FAFC] text-slate-900 antialiased">
 <div class="flex h-screen overflow-hidden">

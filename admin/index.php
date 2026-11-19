@@ -4,189 +4,259 @@ $active_tab = 'dashboard';
 require_once __DIR__ . '/includes/admin_header.php';
 require_once __DIR__ . '/includes/admin_sidebar.php';
 
-// Fetch Live Metrics
-$countHilang = db_fetch_one("SELECT COUNT(*) as c FROM items WHERE status = 'Hilang'")['c'] ?? 52;
-$countTemuan = db_fetch_one("SELECT COUNT(*) as c FROM items WHERE status = 'Ditemukan'")['c'] ?? 84;
-$countVerif = db_fetch_one("SELECT COUNT(*) as c FROM items WHERE status = 'Dalam Verifikasi'")['c'] ?? 19;
-$countSelesai = db_fetch_one("SELECT COUNT(*) as c FROM items WHERE status = 'Dikembalikan'")['c'] ?? 65;
+// Real live counts from database
+$countHilang = db_fetch_one("SELECT COUNT(*) as c FROM items WHERE status = 'Hilang'")['c'] ?? 0;
+$countTemuan = db_fetch_one("SELECT COUNT(*) as c FROM items WHERE status = 'Ditemukan'")['c'] ?? 0;
+$countVerif = db_fetch_one("SELECT COUNT(*) as c FROM items WHERE status = 'Dalam Verifikasi'")['c'] ?? 0;
+$countSelesai = db_fetch_one("SELECT COUNT(*) as c FROM items WHERE status = 'Dikembalikan'")['c'] ?? 0;
 
-// Fetch Urgent Queue
-$urgentItems = db_fetch_all("SELECT * FROM items WHERE status IN ('Dalam Verifikasi', 'Hilang', 'Ditemukan') ORDER BY id DESC LIMIT 5");
+// Monthly data for Bar Chart (2026)
+$monthNames = [
+    6 => 'Jun', 7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov'
+];
+$currentMonthNum = intval(date('n'));
+
+$monthlyCounts = [];
+try {
+    $driver = Database::getDriver();
+    if ($driver === 'sqlite') {
+        $rows = db_fetch_all("SELECT strftime('%m', created_at) as m, COUNT(*) as c FROM items GROUP BY m");
+        foreach ($rows as $r) {
+            $monthlyCounts[intval($r['m'])] = intval($r['c']);
+        }
+    } else {
+        $rows = db_fetch_all("SELECT MONTH(created_at) as m, COUNT(*) as c FROM items WHERE YEAR(created_at) = YEAR(CURRENT_DATE) GROUP BY MONTH(created_at)");
+        foreach ($rows as $r) {
+            $monthlyCounts[intval($r['m'])] = intval($r['c']);
+        }
+    }
+} catch (Throwable $e) {}
+
+$maxCount = 0;
+foreach ($monthNames as $num => $name) {
+    $c = $monthlyCounts[$num] ?? 0;
+    if ($c > $maxCount) $maxCount = $c;
+}
+
+$chartMonths = [];
+foreach ($monthNames as $num => $name) {
+    $c = $monthlyCounts[$num] ?? 0;
+    $height = $maxCount > 0 ? max(10, round(($c / $maxCount) * 90)) : 6;
+    $chartMonths[] = [
+        'month' => $name,
+        'height' => $c > 0 ? $height : 6,
+        'count' => $c,
+        'is_active' => ($num === $currentMonthNum || $num === 11)
+    ];
+}
+
+// Fetch Real Urgent List from database
+$urgentList = [];
+
+// 1. Pending Claims
+try {
+    $pendingClaims = db_fetch_all("
+        SELECT c.*, i.nama as item_nama 
+        FROM claims c 
+        JOIN items i ON c.item_id = i.id 
+        WHERE c.status = 'Dalam Verifikasi' 
+        ORDER BY c.id DESC 
+        LIMIT 5
+    ");
+    foreach ($pendingClaims as $cl) {
+        $urgentList[] = [
+            'title' => 'Klaim ' . $cl['item_nama'],
+            'subtitle' => 'Pengklaim: ' . ($cl['nama_pengklaim'] ?? 'Mahasiswa'),
+            'badge' => 'Klaim Baru',
+            'badge_class' => 'bg-amber-50 text-amber-600',
+            'btn_text' => 'Cek Klaim',
+            'btn_url' => 'verifikasi-klaim.php?id=' . $cl['id'],
+            'type' => 'klaim'
+        ];
+    }
+} catch (Throwable $e) {}
+
+// 2. Pending / Unverified Items
+if (count($urgentList) < 5) {
+    try {
+        $pendingItems = db_fetch_all("
+            SELECT * FROM items 
+            WHERE is_verified = 0 OR status = 'Dalam Verifikasi' OR status IN ('Hilang', 'Ditemukan')
+            ORDER BY id DESC 
+            LIMIT " . (5 - count($urgentList))
+        );
+        foreach ($pendingItems as $it) {
+            $isHilang = ($it['status'] === 'Hilang' || $it['jenis_laporan'] === 'kehilangan');
+            $urgentList[] = [
+                'title' => $it['nama'],
+                'subtitle' => ($isHilang ? 'Pelapor: ' : 'Penemu: ') . ($it['pelapor_nama'] ?? 'Civitas Kampus'),
+                'badge' => $it['status'],
+                'badge_class' => $isHilang ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600',
+                'btn_text' => 'Verifikasi',
+                'btn_url' => 'verifikasi-laporan.php?id=' . $it['id'],
+                'type' => 'laporan'
+            ];
+        }
+    } catch (Throwable $e) {}
+}
 ?>
 
-<div class="flex-1 flex flex-col overflow-y-auto">
-    <!-- Top Header -->
-    <header class="h-16 bg-white border-b border-slate-200 px-6 sm:px-8 flex items-center justify-between shrink-0">
+<div class="flex-1 flex flex-col bg-[#F8FAFC] overflow-y-auto min-w-0">
+    <!-- Top Header Bar matching Figma -->
+    <header class="px-8 pt-8 pb-6 flex items-center justify-between shrink-0">
         <div>
-            <h1 class="text-lg font-bold text-slate-900 tracking-tight">Dashboard Utama</h1>
-            <p class="text-xs text-slate-500">Admin: Posko Terpadu Keamanan Kampus</p>
+            <h1 class="text-2xl font-bold text-slate-900 tracking-tight">Dashboard Utama</h1>
         </div>
-        <div class="flex items-center gap-3">
-            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>Sistem Aktif (Online)</span>
-            </span>
-            <a href="../index.php" target="_blank" class="btn-secondary h-9 px-3.5 text-xs font-medium rounded-btn inline-flex items-center gap-1.5">
-                <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-400"></i>
-                <span>Lihat Web Mahasiswa</span>
-            </a>
+        <div>
+            <span class="text-sm font-normal text-slate-500">Admin: Posko Terpadu Keamanan Kampus</span>
         </div>
     </header>
 
-    <!-- Main Content Body -->
-    <main class="flex-1 p-6 sm:p-8 space-y-6 max-w-7xl">
+    <!-- Main Content Area -->
+    <main class="px-8 pb-8 space-y-6">
         
-        <!-- 4 Stat Cards matching Figma -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            <!-- Stat 1: Laporan Hilang -->
-            <div class="card-default p-5 bg-white rounded-card border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-medium text-slate-500">Laporan Hilang</p>
-                    <h3 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1"><?= $countHilang ?></h3>
-                    <span class="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full border border-red-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                        Hilang
-                    </span>
+        <!-- 4 Metric Cards Row matching Figma -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            
+            <!-- Card 1: Laporan Hilang -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.03)] flex flex-col justify-between h-[138px]">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-slate-500">Laporan Hilang</span>
+                    <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-red-50 text-red-500">Hilang</span>
                 </div>
-                <div class="w-12 h-12 rounded-xl bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-                    <i data-lucide="file-question" class="w-6 h-6"></i>
-                </div>
-            </div>
-
-            <!-- Stat 2: Barang Ditemukan -->
-            <div class="card-default p-5 bg-white rounded-card border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-medium text-slate-500">Barang Ditemukan</p>
-                    <h3 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1"><?= $countTemuan ?></h3>
-                    <span class="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        Ditemukan
-                    </span>
-                </div>
-                <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                    <i data-lucide="package-check" class="w-6 h-6"></i>
+                <div class="flex items-end justify-between">
+                    <span class="text-4xl font-extrabold text-red-500 tracking-tight leading-none"><?= $countHilang ?></span>
+                    <div class="w-8 h-8 rounded-full border-2 border-red-500 flex items-center justify-center text-red-500 font-bold text-base leading-none shrink-0 mb-0.5">
+                        !
+                    </div>
                 </div>
             </div>
 
-            <!-- Stat 3: Dalam Verifikasi -->
-            <div class="card-default p-5 bg-white rounded-card border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-medium text-slate-500">Dalam Verifikasi</p>
-                    <h3 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1"><?= $countVerif ?></h3>
-                    <span class="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
-                        Verifikasi
-                    </span>
+            <!-- Card 2: Barang Ditemukan -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.03)] flex flex-col justify-between h-[138px]">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-slate-500">Barang Ditemukan</span>
+                    <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-500">Ditemukan</span>
                 </div>
-                <div class="w-12 h-12 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-                    <i data-lucide="clock" class="w-6 h-6"></i>
+                <div class="flex items-end justify-between">
+                    <span class="text-4xl font-extrabold text-emerald-500 tracking-tight leading-none"><?= $countTemuan ?></span>
+                    <div class="shrink-0 text-emerald-500">
+                        <svg class="w-8 h-8 stroke-[1.75]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m7.5 4.27 9 5.15"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m3.3 7 8.7 5 8.7-5"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 22V12"></path>
+                        </svg>
+                    </div>
                 </div>
             </div>
 
-            <!-- Stat 4: Selesai Dikembalikan -->
-            <div class="card-default p-5 bg-white rounded-card border border-slate-200 shadow-sm flex items-center justify-between">
-                <div>
-                    <p class="text-xs font-medium text-slate-500">Selesai Dikembalikan</p>
-                    <h3 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1"><?= $countSelesai ?></h3>
-                    <span class="inline-flex items-center gap-1 mt-2 text-[11px] font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                        <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                        Dikembalikan
-                    </span>
+            <!-- Card 3: Dalam Verifikasi -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.03)] flex flex-col justify-between h-[138px]">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-slate-500">Dalam Verifikasi</span>
+                    <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-500">Verifikasi</span>
                 </div>
-                <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-                    <i data-lucide="check-check" class="w-6 h-6"></i>
+                <div class="flex items-end justify-between">
+                    <span class="text-4xl font-extrabold text-amber-500 tracking-tight leading-none"><?= $countVerif ?></span>
+                    <div class="shrink-0 text-amber-500">
+                        <svg class="w-8 h-8 stroke-[1.75]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                        </svg>
+                    </div>
                 </div>
             </div>
+
+            <!-- Card 4: Selesai Dikembalikan -->
+            <div class="bg-white rounded-2xl p-6 border border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.03)] flex flex-col justify-between h-[138px]">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-medium text-slate-500">Selesai Dikembalikan</span>
+                    <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-500">Dikembalikan</span>
+                </div>
+                <div class="flex items-end justify-between">
+                    <span class="text-4xl font-extrabold text-indigo-600 tracking-tight leading-none"><?= $countSelesai ?></span>
+                    <div class="shrink-0 text-indigo-600">
+                        <svg class="w-8 h-8 stroke-[1.75]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline stroke-linecap="round" stroke-linejoin="round" points="9 12 11.5 14.5 15 10"></polyline>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        <!-- 2 Columns: Chart & Urgent Queue -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- 2 Columns Grid: Bar Chart (Left) & Urgent Queue (Right) matching Figma -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
             
-            <!-- Left: Card Chart (7 cols) -->
-            <div class="lg:col-span-7 card-default p-6 bg-white rounded-card border border-slate-200 shadow-sm">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h3 class="text-base font-bold text-slate-900">Grafik Laporan per Bulan (2026)</h3>
-                        <p class="text-xs text-slate-500">Jumlah laporan barang hilang dan temuan per bulan</p>
-                    </div>
-                    <span class="text-xs font-semibold text-primary bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200">
-                        Tahun 2026
-                    </span>
+            <!-- Left Column: Grafik Laporan per Bulan (2026) -->
+            <div class="bg-white rounded-2xl p-7 border border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.03)] flex flex-col justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">Grafik Laporan per Bulan (2026)</h2>
+                    <p class="text-xs text-slate-400 mt-1">Jumlah laporan barang hilang dan temuan per bulan</p>
                 </div>
 
-                <!-- Visual Bar Chart Representation matching Figma -->
-                <div class="h-64 flex items-end justify-between gap-3 sm:gap-6 pt-6 border-b border-slate-100">
-                    <?php
-                    $months = [
-                        ['m' => 'Jun', 'hilang' => 35, 'temu' => 45],
-                        ['m' => 'Jul', 'hilang' => 28, 'temu' => 50],
-                        ['m' => 'Agu', 'hilang' => 42, 'temu' => 65],
-                        ['m' => 'Sep', 'hilang' => 55, 'temu' => 70],
-                        ['m' => 'Okt', 'hilang' => 48, 'temu' => 80],
-                        ['m' => 'Nov', 'hilang' => 52, 'temu' => 84],
-                    ];
-                    foreach ($months as $mo):
-                    ?>
-                        <div class="flex-1 flex flex-col items-center gap-2 h-full justify-end group">
-                            <div class="w-full max-w-[32px] flex items-end justify-center gap-1 h-full">
-                                <div style="height: <?= $mo['hilang'] ?>%;" class="w-3 sm:w-3.5 bg-red-400 rounded-t group-hover:bg-red-500 transition-all" title="Hilang: <?= $mo['hilang'] ?>"></div>
-                                <div style="height: <?= $mo['temu'] ?>%;" class="w-3 sm:w-3.5 bg-blue-500 rounded-t group-hover:bg-blue-600 transition-all" title="Temuan: <?= $mo['temu'] ?>"></div>
+                <!-- Clean Vertical Bar Chart matching Figma -->
+                <div class="h-72 flex items-end justify-between px-4 sm:px-6 pt-10 pb-2">
+                    <?php foreach ($chartMonths as $m): ?>
+                        <div class="flex-1 flex flex-col items-center justify-end h-full group relative">
+                            <!-- Tooltip on hover -->
+                            <div class="absolute -top-7 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] font-semibold py-1 px-2 rounded pointer-events-none shadow-md whitespace-nowrap z-10">
+                                <?= $m['count'] ?> Laporan
                             </div>
-                            <span class="text-xs font-medium text-slate-500"><?= $mo['m'] ?></span>
+                            <!-- Blue Bar matching Figma -->
+                            <div style="height: <?= $m['height'] ?>%;" 
+                                 class="w-10 sm:w-12 bg-blue-600 rounded-t-lg group-hover:bg-blue-700 transition-all duration-300">
+                            </div>
+                            <!-- Month Label -->
+                            <span class="text-xs mt-3 <?= $m['is_active'] ? 'font-bold text-slate-900' : 'font-medium text-slate-500' ?>">
+                                <?= $m['month'] ?>
+                            </span>
                         </div>
                     <?php endforeach; ?>
                 </div>
-
-                <div class="flex items-center justify-center gap-6 mt-4 text-xs text-slate-600">
-                    <span class="flex items-center gap-1.5">
-                        <span class="w-3 h-3 rounded bg-red-400"></span>
-                        <span>Barang Hilang</span>
-                    </span>
-                    <span class="flex items-center gap-1.5">
-                        <span class="w-3 h-3 rounded bg-blue-500"></span>
-                        <span>Barang Temuan</span>
-                    </span>
-                </div>
             </div>
 
-            <!-- Right: Card Queue Perlu Diproses Segera (5 cols) -->
-            <div class="lg:col-span-5 card-default p-6 bg-white rounded-card border border-slate-200 shadow-sm flex flex-col justify-between">
+            <!-- Right Column: Perlu Diproses Segera -->
+            <div class="bg-white rounded-2xl p-7 border border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.03)] flex flex-col justify-between">
                 <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h3 class="text-base font-bold text-slate-900">Perlu Diproses Segera</h3>
-                            <p class="text-xs text-slate-500">Laporan baru dan klaim yang menunggu tindakan admin</p>
-                        </div>
-                        <span class="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                            <?= count($urgentItems) ?> Item
-                        </span>
-                    </div>
+                    <h2 class="text-lg font-bold text-slate-900">Perlu Diproses Segera (<?= count($urgentList) ?> Item)</h2>
+                    <p class="text-xs text-slate-400 mt-1 mb-5">Laporan baru dan klaim yang menunggu tindakan admin</p>
 
-                    <div class="divide-y divide-slate-100">
-                        <?php foreach ($urgentItems as $it): ?>
-                            <div class="py-3 flex items-center justify-between gap-3">
-                                <div class="min-w-0">
-                                    <h4 class="text-xs sm:text-sm font-bold text-slate-900 truncate"><?= htmlspecialchars($it['nama']) ?></h4>
-                                    <p class="text-[11px] text-slate-500 truncate mt-0.5">
-                                        <?= htmlspecialchars($it['pelapor_nama']) ?> &bull; <span class="font-mono text-slate-400">#<?= htmlspecialchars($it['kode']) ?></span>
-                                    </p>
-                                </div>
-                                <div class="shrink-0 flex items-center gap-2">
-                                    <?= render_status_badge($it['status'], 'sm') ?>
-                                    <a href="verifikasi-laporan.php?id=<?= $it['id'] ?>" class="btn-primary h-7 px-2.5 text-[11px] font-semibold rounded-btn">
-                                        Verifikasi
-                                    </a>
-                                </div>
+                    <!-- List of items matching Figma or Empty State -->
+                    <?php if (empty($urgentList)): ?>
+                        <div class="py-14 flex flex-col items-center justify-center text-center">
+                            <div class="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-emerald-500 mb-3 border border-slate-100 shadow-xs">
+                                <i data-lucide="check-circle" class="w-6 h-6"></i>
                             </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-
-                <div class="pt-4 border-t border-slate-100 mt-4 text-center">
-                    <a href="verifikasi-laporan.php" class="text-xs font-semibold text-primary hover:text-blue-700 inline-flex items-center gap-1">
-                        <span>Lihat Semua Antrean Verifikasi</span>
-                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-                    </a>
+                            <h4 class="text-sm font-semibold text-slate-800">Semua Laporan Selesai</h4>
+                            <p class="text-xs text-slate-400 mt-1 max-w-xs">Tidak ada antrean laporan baru atau klaim yang menunggu tindakan admin saat ini.</p>
+                        </div>
+                    <?php else: ?>
+                        <div class="space-y-3">
+                            <?php foreach ($urgentList as $item): ?>
+                                <div class="border border-slate-100/90 rounded-xl p-3.5 flex items-center justify-between hover:border-slate-200 transition-colors bg-white">
+                                    <div class="min-w-0 pr-3">
+                                        <h3 class="text-sm font-semibold text-slate-900 truncate"><?= htmlspecialchars($item['title']) ?></h3>
+                                        <p class="text-xs text-slate-400 truncate mt-0.5"><?= htmlspecialchars($item['subtitle']) ?></p>
+                                    </div>
+                                    <div class="shrink-0 flex items-center gap-3">
+                                        <span class="text-xs font-semibold px-3 py-1 rounded-full <?= $item['badge_class'] ?>">
+                                            <?= htmlspecialchars($item['badge']) ?>
+                                        </span>
+                                        <a href="<?= htmlspecialchars($item['btn_url']) ?>" 
+                                           class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg inline-flex items-center gap-1 shadow-sm transition-colors">
+                                            <span><?= htmlspecialchars($item['btn_text']) ?></span>
+                                            <svg class="w-3.5 h-3.5 stroke-[2.5]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
 

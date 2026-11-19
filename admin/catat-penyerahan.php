@@ -1,8 +1,7 @@
 <?php
-$page_title = 'Catat Penyerahan Barang - SIP-Barang Admin';
-$active_tab = 'penyerahan';
-require_once __DIR__ . '/includes/admin_header.php';
-require_once __DIR__ . '/includes/admin_sidebar.php';
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/data.php';
 
 $successReceipt = null;
 
@@ -12,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nimPenerima = trim($_POST['nim_penerima'] ?? '');
     $kontakPenerima = trim($_POST['kontak_penerima'] ?? '');
     $catatan = trim($_POST['catatan'] ?? '');
-    $petugas = trim($_POST['petugas_penyerah'] ?? $currentUser['nama']);
+    $petugas = trim($_POST['petugas_penyerah'] ?? 'Petugas Pos Keamanan');
 
     $item = get_item_by_id($itemId);
     if ($item && !empty($namaPenerima)) {
@@ -28,8 +27,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $itemId
         ]);
 
+        $noBa = 'BA-' . date('Ymd') . '-' . random_int(100, 999);
+
+        // Send notifications to user(s)
+        $notifiedUsers = [];
+
+        // 1. Check associated claims for user IDs
+        $claimUsers = db_fetch_all("SELECT DISTINCT user_id FROM claims WHERE item_id = ? AND user_id IS NOT NULL", [$itemId]);
+        foreach ($claimUsers as $cu) {
+            $uid = intval($cu['user_id']);
+            if ($uid > 0 && !in_array($uid, $notifiedUsers)) {
+                $notifiedUsers[] = $uid;
+            }
+        }
+
+        // 2. Check user by NIM
+        if (!empty($nimPenerima)) {
+            $u = db_fetch_one("SELECT id FROM users WHERE nim = ?", [$nimPenerima]);
+            if ($u && !in_array(intval($u['id']), $notifiedUsers)) {
+                $notifiedUsers[] = intval($u['id']);
+            }
+        }
+
+        // 3. Check user by Nama
+        if (!empty($namaPenerima)) {
+            $u = db_fetch_one("SELECT id FROM users WHERE LOWER(nama) = LOWER(?)", [$namaPenerima]);
+            if ($u && !in_array(intval($u['id']), $notifiedUsers)) {
+                $notifiedUsers[] = intval($u['id']);
+            }
+        }
+
+        // Send notification to recipient / claimant
+        foreach ($notifiedUsers as $uid) {
+            db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link) VALUES (?, ?, ?, 'check-circle', 1, 'riwayat.php?tab=klaim')", [
+                $uid,
+                'Barang Anda Telah Diserahkan!',
+                "Barang '{$item['nama']}' (#{$item['kode']}) telah resmi diserahkan kepada {$namaPenerima}" . (!empty($nimPenerima) ? " ({$nimPenerima})" : "") . " oleh petugas {$petugas}. No. Berita Acara: {$noBa}. Terima kasih telah menggunakan layanan SIP-Barang Kampus."
+            ]);
+        }
+
+        // 4. Send notification to reporter (pelapor temuan)
+        if (!empty($item['pelapor_id']) && !in_array(intval($item['pelapor_id']), $notifiedUsers)) {
+            db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link) VALUES (?, ?, ?, 'package-check', 1, 'riwayat.php?tab=laporan')", [
+                $item['pelapor_id'],
+                'Barang Temuan Telah Diserahkan ke Pemilik!',
+                "Kabar baik! Barang temuan yang Anda laporkan '{$item['nama']}' (#{$item['kode']}) telah resmi diserahkan kembali kepada pemilik sah ({$namaPenerima}). Terima kasih banyak atas integritas dan kepedulian Anda!"
+            ]);
+        }
+
         $successReceipt = [
-            'no_ba' => 'BA-' . date('Ymd') . '-' . random_int(100, 999),
+            'no_ba' => $noBa,
             'item_nama' => $item['nama'],
             'item_kode' => $item['kode'],
             'penerima' => $namaPenerima,
@@ -37,12 +84,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'kontak' => $kontakPenerima,
             'petugas' => $petugas,
             'catatan' => $catatan,
-            'waktu' => date('d F Y, H:i') . ' WIB'
+            'waktu' => date('d F Y, H:i') . ' WIB',
+            'notified_count' => count($notifiedUsers) + (!empty($item['pelapor_id']) ? 1 : 0)
         ];
 
-        set_flash_message('success', "Berita acara penyerahan barang '{$item['nama']}' berhasil dicatat!");
+        set_flash_message('success', "Berita acara penyerahan barang '{$item['nama']}' berhasil dicatat dan notifikasi telah dikirimkan ke pengguna!");
     }
 }
+
+$page_title = 'Catat Penyerahan Barang - SIP-Barang Admin';
+$active_tab = 'penyerahan';
+require_once __DIR__ . '/includes/admin_header.php';
+require_once __DIR__ . '/includes/admin_sidebar.php';
 
 // Items available for handover
 $availableItems = db_fetch_all("SELECT * FROM items WHERE status IN ('Ditemukan', 'Dalam Verifikasi') ORDER BY id DESC");
@@ -53,7 +106,7 @@ $availableItems = db_fetch_all("SELECT * FROM items WHERE status IN ('Ditemukan'
     <header class="h-16 bg-white border-b border-slate-200 px-6 sm:px-8 flex items-center justify-between shrink-0">
         <div>
             <h1 class="text-lg font-bold text-slate-900 tracking-tight">Catat Penyerahan Barang (Serah Terima)</h1>
-            <p class="text-xs text-slate-500">Dokumentasikan pengembalian fisik barang temuan ke pemilik sah</p>
+            <p class="text-xs text-slate-500">Dokumentasikan pengembalian fisik barang temuan ke pemilik sah & kirim notifikasi otomatis</p>
         </div>
     </header>
 
@@ -70,6 +123,12 @@ $availableItems = db_fetch_all("SELECT * FROM items WHERE status IN ('Ditemukan'
                         <h2 class="text-base font-bold text-slate-900">Berita Acara Serah Terima Resmi Terbit</h2>
                         <p class="text-xs text-slate-500">Nomor Registrasi: <span class="font-mono font-bold text-emerald-700"><?= $successReceipt['no_ba'] ?></span></p>
                     </div>
+                </div>
+
+                <!-- Notifikasi Alert Info -->
+                <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2.5">
+                    <i data-lucide="bell-ring" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+                    <span><strong>Notifikasi Terkirim:</strong> Sistem telah otomatis mengirim pemberitahuan penyerahan ke akun pengguna terkait (penerima dan pelapor).</span>
                 </div>
 
                 <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-2">
@@ -159,12 +218,18 @@ $availableItems = db_fetch_all("SELECT * FROM items WHERE status IN ('Ditemukan'
                     <textarea name="catatan" rows="3" placeholder="Penerima menunjukkan KTM asli dan membuktikan kepemilikan. Fisik barang diserahkan dalam kondisi baik..." class="input-default text-xs md:text-sm">Penerima telah menunjukkan KTM asli serta mencocokkan ciri khusus. Fisik barang telah diserahkan dalam kondisi lengkap dan baik.</textarea>
                 </div>
 
+                <!-- Info Notifikasi Otomatis -->
+                <div class="p-3 bg-blue-50/70 border border-blue-200/70 rounded-xl flex items-center gap-2.5 text-xs text-blue-800">
+                    <i data-lucide="info" class="w-4 h-4 text-blue-600 shrink-0"></i>
+                    <span>Notifikasi penyelesaian serah terima akan otomatis dikirimkan ke akun <strong>Penerima / Pemilik</strong> dan <strong>Pelapor Temuan</strong>.</span>
+                </div>
+
                 <!-- Submit Button -->
                 <div class="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
                     <a href="index.php" class="btn-secondary h-11 px-5 rounded-btn text-xs md:text-sm font-medium">Batal</a>
-                    <button type="submit" class="btn-primary h-11 px-6 rounded-btn text-xs md:text-sm font-semibold flex items-center gap-2">
+                    <button type="submit" class="btn-primary h-11 px-6 rounded-btn text-xs md:text-sm font-semibold flex items-center gap-2 shadow-sm">
                         <i data-lucide="check-circle" class="w-4 h-4"></i>
-                        <span>Terbitkan Berita Acara & Selesaikan</span>
+                        <span>Terbitkan Berita Acara & Kirim Notifikasi</span>
                     </button>
                 </div>
 

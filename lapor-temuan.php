@@ -73,8 +73,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $sql = "INSERT INTO items (
             kode, nama, kategori, kategori_slug, status, jenis_laporan, lokasi, lokasi_singkat,
             waktu_kejadian, deskripsi, ciri_umum, tempat_simpan, pelapor_id,
-            pelapor_nama, pelapor_tipe, foto, icon, warna_placeholder
-        ) VALUES (?, ?, ?, ?, 'Ditemukan', 'temuan', ?, ?, ?, ?, ?, ?, ?, ?, 'Mahasiswa', ?, ?, '#d1fae5')";
+            pelapor_nama, pelapor_tipe, foto, icon, warna_placeholder, is_verified
+        ) VALUES (?, ?, ?, ?, 'Dalam Verifikasi', 'temuan', ?, ?, ?, ?, ?, ?, ?, ?, 'Mahasiswa', ?, ?, '#d1fae5', 0)";
 
         $ok = db_execute($sql, [
             $kode,
@@ -94,13 +94,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
 
         if ($ok) {
-            db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread) VALUES (?, ?, ?, 'package-check', 1)", [
+            db_execute("INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link) VALUES (?, ?, ?, 'package-check', 1, 'riwayat.php?tab=laporan')", [
                 $pelaporId,
                 'Laporan Temuan Berhasil Dibuat!',
-                "Terima kasih atas kebaikan Anda. Laporan temuan '{$namaBarang}' (#{kode}) telah tercatat di sistem."
+                "Terima kasih atas kebaikan Anda. Laporan temuan '{$namaBarang}' (#{$kode}) telah tercatat di sistem dan menunggu verifikasi petugas keamanan."
             ]);
 
-            set_flash_message('success', "Laporan temuan berhasil dikirim! Kode laporan: #{$kode}. Terima kasih telah berinisiatif baik.");
+            set_flash_message('success', "Laporan temuan berhasil dikirim! Kode laporan: #{$kode}. Menunggu verifikasi petugas.");
             header('Location: riwayat.php?tab=laporan');
             exit;
         } else {

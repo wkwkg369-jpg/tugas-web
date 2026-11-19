@@ -1,8 +1,7 @@
 <?php
-$page_title = 'Kelola Laporan - SIP-Barang Admin';
-$active_tab = 'kelola';
-require_once __DIR__ . '/includes/admin_header.php';
-require_once __DIR__ . '/includes/admin_sidebar.php';
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/data.php';
 
 // Handle Status Change
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
@@ -22,6 +21,11 @@ if (isset($_GET['delete'])) {
     header('Location: kelola-laporan.php');
     exit;
 }
+
+$page_title = 'Kelola Laporan - SIP-Barang Admin';
+$active_tab = 'kelola';
+require_once __DIR__ . '/includes/admin_header.php';
+require_once __DIR__ . '/includes/admin_sidebar.php';
 
 $search = trim($_GET['q'] ?? '');
 $statusFilter = trim($_GET['status'] ?? '');

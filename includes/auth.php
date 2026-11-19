@@ -4,6 +4,10 @@
  * SIP-Barang Kampus
  */
 
+if (!ob_get_level()) {
+    ob_start();
+}
+
 require_once __DIR__ . '/db.php';
 
 // Safe session save path for portable / XAMPP / sandbox environments

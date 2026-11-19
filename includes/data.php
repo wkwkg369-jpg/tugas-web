@@ -113,15 +113,14 @@ function format_item_data(array $it): array {
 function get_mock_notifications(?int $userId = null): array {
     if ($userId === null) {
         $user = get_logged_in_user();
-        $userId = $user ? $user['id'] : 1;
+        $userId = $user ? $user['id'] : null;
+    }
+
+    if (!$userId) {
+        return [];
     }
 
     $rows = db_fetch_all("SELECT * FROM notifications WHERE user_id = ? ORDER BY id DESC", [$userId]);
-    if (empty($rows)) {
-        // Fallback to all notifications
-        $rows = db_fetch_all("SELECT * FROM notifications ORDER BY id DESC LIMIT 5");
-    }
-
     return array_map(function($n) {
         return [
             'id' => intval($n['id']),
@@ -164,13 +163,10 @@ function get_user_reports(?int $userId = null): array {
 
     if ($userId) {
         $rows = db_fetch_all("SELECT * FROM items WHERE pelapor_id = ? ORDER BY id DESC", [$userId]);
-        if (!empty($rows)) {
-            return array_map('format_item_data', $rows);
-        }
+        return array_map('format_item_data', $rows);
     }
 
-    // Default sample reports for demo
-    return array_slice(get_items(), 0, 3);
+    return [];
 }
 
 function get_user_claims(?int $userId = null): array {
@@ -179,27 +175,17 @@ function get_user_claims(?int $userId = null): array {
         $userId = $user ? $user['id'] : null;
     }
 
+    if (!$userId) {
+        return [];
+    }
+
     $sql = "SELECT c.*, i.nama as item_nama, i.kategori as item_kategori, i.kode as item_kode, i.icon as item_icon 
             FROM claims c 
-            JOIN items i ON c.item_id = i.id";
-    $params = [];
+            JOIN items i ON c.item_id = i.id
+            WHERE c.user_id = ?
+            ORDER BY c.id DESC";
 
-    if ($userId) {
-        $sql .= " WHERE c.user_id = ?";
-        $params[] = $userId;
-    }
-    $sql .= " ORDER BY c.id DESC";
-
-    $rows = db_fetch_all($sql, $params);
-    if (empty($rows)) {
-        // Return demo row if none found
-        $rows = db_fetch_all("SELECT c.*, i.nama as item_nama, i.kategori as item_kategori, i.kode as item_kode 
-                              FROM claims c 
-                              JOIN items i ON c.item_id = i.id 
-                              ORDER BY c.id DESC LIMIT 1");
-    }
-
-    return $rows;
+    return db_fetch_all($sql, [$userId]);
 }
 
 // Relative time formatting helper
