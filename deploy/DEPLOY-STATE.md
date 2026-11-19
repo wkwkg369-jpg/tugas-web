@@ -58,6 +58,18 @@ dijalankan `php deploy/seed-demo.php` yang menambahkan 8 laporan contoh
 (4 ditemukan, 3 hilang, 1 dikembalikan). Skrip aman dijalankan ulang: berhenti sendiri
 bila tabel `items` sudah berisi data.
 
+
+## Perbedaan dari repo (patch lokal)
+
+| File | Perubahan | Alasan |
+|---|---|---|
+| `admin/includes/admin_header.php` | auto-login admin demo **dimatikan**, diganti `require_admin('../masuk.php')` | Versi repo membuka `/admin/` tanpa login; di domain publik siapa pun bisa menyetujui klaim & menghapus laporan |
+| `deploy/seed-demo.php` | baru | Katalog repo kosong (0 item); skrip ini mengisi 8 contoh |
+| `.gitignore` | abaikan `sessions/sess_*` dan `assets/uploads/*` | berkas runtime tidak perlu ikut repo |
+
+Uji: `/admin/index.php` tanpa login → 302 `/masuk.php`; login `admin@ui.ac.id` → 200;
+login mahasiswa → 302 `/masuk.php`.
+
 ## Perawatan
 
 ```bash

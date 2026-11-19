@@ -3,15 +3,10 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/data.php';
 
-// Auto-login demo admin if not logged in to make review effortless
-if (!is_logged_in() || !is_admin()) {
-    $adminUser = db_fetch_one("SELECT * FROM users WHERE role = 'admin' LIMIT 1");
-    if ($adminUser) {
-        $_SESSION['user_id'] = $adminUser['id'];
-        unset($adminUser['password']);
-        $_SESSION['user'] = $adminUser;
-    }
-}
+// Halaman admin WAJIB login sebagai admin/petugas.
+// (Versi repo melakukan auto-login admin demo; itu dimatikan karena situs ini
+//  dapat diakses publik, sehingga siapa pun bisa mengubah data.)
+require_admin('../masuk.php');
 
 $currentUser = get_logged_in_user();
 if (!isset($page_title)) {
