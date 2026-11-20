@@ -2,50 +2,101 @@
 require_once __DIR__ . '/includes/db.php';
 require_once __DIR__ . '/includes/auth.php';
 
-$state = isset($_GET['state']) ? $_GET['state'] : 'default'; // 'default', 'salah', 'berhasil'
-$email = $_GET['email'] ?? ($_SESSION['pending_otp']['email'] ?? 'budi.pratama@ui.ac.id');
+// Verifikasi email (OTP) memakai layanan terpusat di includes/otp.php:
+// kode berlaku 10 menit, hanya sekali pakai, kirim ulang membatalkan kode lama,
+// dan batas percobaan disimpan di database (bukan sesi).
+$otpType = 'register';
+
+$state = isset($_GET['state']) ? (string) $_GET['state'] : 'default'; // 'default', 'salah', 'berhasil'
+$email = strtolower(trim((string) ($_GET['email'] ?? ($_SESSION['pending_otp']['email'] ?? ''))));
 $errorMessage = '';
 
+// Halaman ini tidak lagi menyediakan pemilih "preview state" untuk umum;
+// state hanya ditentukan oleh hasil verifikasi dan parameter ?state= dari redirect.
+if (!in_array($state, ['default', 'salah', 'berhasil', 'kirim'], true)) {
+    $state = 'default';
+}
+
+// ---------------------------------------------------------------- Kirim ulang
+if ($state === 'kirim') {
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        set_flash_message('error', 'Alamat email tidak valid. Silakan daftar ulang.');
+        header('Location: daftar.php');
+        exit;
+    }
+
+    $wait = sip_otp_resend_blocked($email, $otpType);
+    if ($wait > 0) {
+        set_flash_message('warning', "Tunggu {$wait} detik lagi sebelum meminta kode baru.");
+        header('Location: verifikasi-otp.php?email=' . urlencode($email));
+        exit;
+    }
+
+    $issued = sip_otp_issue($email, $otpType);
+    $user = db_fetch_one("SELECT nama FROM users WHERE LOWER(email) = ? LIMIT 1", [$email]);
+    $sent = sip_otp_send($email, $issued['code'], $otpType, $user['nama'] ?? '');
+    $_SESSION['pending_otp'] = ['email' => $email, 'code' => $issued['code']];
+
+    if ($sent['ok']) {
+        set_flash_message('success', "Kode verifikasi baru sudah dikirim ke {$email}.");
+    } elseif (!sip_mail_ready()) {
+        set_flash_message('warning', 'Pengiriman email belum aktif di server ini (mode demo). Hubungi petugas keamanan kampus.');
+    } else {
+        set_flash_message('error', 'Gagal mengirim email verifikasi. Coba lagi beberapa saat lagi atau hubungi petugas.');
+    }
+
+    header('Location: verifikasi-otp.php?email=' . urlencode($email));
+    exit;
+}
+
+// ------------------------------------------------------------------ Verifikasi
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Collect digits
     $digits = $_POST['digits'] ?? [];
     $enteredCode = '';
     if (is_array($digits)) {
         $enteredCode = implode('', $digits);
     } elseif (isset($_POST['otp_code'])) {
-        $enteredCode = trim($_POST['otp_code']);
+        $enteredCode = trim((string) $_POST['otp_code']);
     }
 
-    $expectedOtp = $_SESSION['pending_otp']['code'] ?? null;
-    $dbOtp = db_fetch_one("SELECT * FROM otp_codes WHERE email = ? AND is_used = 0 ORDER BY id DESC LIMIT 1", [$email]);
-
-    // Batasi 5 percobaan per sesi agar kode 6 digit tidak bisa ditebak.
-    $_SESSION['otp_attempts'] = (int) ($_SESSION['otp_attempts'] ?? 0) + 1;
-
-    if ($_SESSION['otp_attempts'] > 5) {
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $state = 'salah';
-        $errorMessage = 'Terlalu banyak percobaan. Minta kode baru lalu coba lagi.';
-    } elseif ($enteredCode !== '' && $dbOtp && hash_equals((string) $dbOtp['code'], $enteredCode)) {
-        // Kode yang benar hanya berasal dari database / sesi; tidak ada kode cadangan.
-        db_execute("UPDATE otp_codes SET is_used = 1 WHERE email = ? AND is_used = 0", [$email]);
-        unset($_SESSION['pending_otp'], $_SESSION['otp_attempts']);
-        $state = 'berhasil';
-    } elseif ($expectedOtp && $enteredCode !== '' && hash_equals((string) $expectedOtp, $enteredCode)) {
-        unset($_SESSION['pending_otp'], $_SESSION['otp_attempts']);
-        $state = 'berhasil';
+        $errorMessage = 'Sesi verifikasi tidak ditemukan. Silakan masuk lalu minta kode baru.';
     } else {
-        $state = 'salah';
+        $res = sip_otp_verify($email, $enteredCode, $otpType);
+        if ($res['ok']) {
+            sip_mark_email_verified($email);
+            $user = db_fetch_one("SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1", [$email]);
+
+            // Login baru diberikan setelah email terbukti dikuasai pendaftar.
+            if ($user && (!isset($user['is_active']) || (int) $user['is_active'] === 1)) {
+                if (session_status() === PHP_SESSION_ACTIVE) {
+                    @session_regenerate_id(true);
+                }
+                unset($user['password']);
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user'] = $user;
+            }
+
+            unset($_SESSION['pending_otp'], $_SESSION['otp_attempts']);
+            $state = 'berhasil';
+        } else {
+            $state = 'salah';
+            $errorMessage = $res['error'];
+        }
     }
 }
 
 $titles = [
-    'default' => 'Verifikasi OTP - SIP-Barang Kampus',
-    'salah' => 'Verifikasi OTP Salah - SIP-Barang Kampus',
-    'berhasil' => 'Verifikasi OTP Berhasil - SIP-Barang Kampus'
+    'default' => 'Verifikasi Email - SIP-Barang Kampus',
+    'salah' => 'Kode Verifikasi Salah - SIP-Barang Kampus',
+    'berhasil' => 'Email Terverifikasi - SIP-Barang Kampus'
 ];
 $page_title = $titles[$state] ?? $titles['default'];
 $current_page = 'otp';
 require_once __DIR__ . '/includes/header.php';
+$resendWait = ($email !== '') ? sip_otp_resend_blocked($email, $otpType) : 0;
+$flash = get_flash_message();
 ?>
 
 <!-- Minimal Navbar for OTP screen as per Figma (ID: 1084, 1113, 1145) -->
@@ -61,22 +112,6 @@ require_once __DIR__ . '/includes/header.php';
         </a>
     </div>
 </nav>
-
-<!-- State Switcher Bar for Developer Testing & Figma Verification -->
-<div class="bg-slate-100 border-b border-slate-200 py-2 px-4 text-center">
-    <div class="inline-flex items-center gap-2 text-xs text-slate-500">
-        <span class="font-bold text-slate-700">Preview State Desain:</span>
-        <a href="verifikasi-otp.php?state=default&email=<?= urlencode($email) ?>" class="px-2.5 py-1 rounded-full font-medium transition-colors <?= $state === 'default' ? 'bg-primary text-white font-semibold' : 'bg-white text-slate-600 hover:bg-slate-200' ?>">
-            1. Normal (Input)
-        </a>
-        <a href="verifikasi-otp.php?state=salah&email=<?= urlencode($email) ?>" class="px-2.5 py-1 rounded-full font-medium transition-colors <?= $state === 'salah' ? 'bg-red-500 text-white font-semibold' : 'bg-white text-slate-600 hover:bg-slate-200' ?>">
-            2. Salah (Error)
-        </a>
-        <a href="verifikasi-otp.php?state=berhasil&email=<?= urlencode($email) ?>" class="px-2.5 py-1 rounded-full font-medium transition-colors <?= $state === 'berhasil' ? 'bg-emerald-500 text-white font-semibold' : 'bg-white text-slate-600 hover:bg-slate-200' ?>">
-            3. Berhasil (Success)
-        </a>
-    </div>
-</div>
 
 <main class="flex-1 py-14 flex items-center justify-center px-4">
     
@@ -116,25 +151,25 @@ require_once __DIR__ . '/includes/header.php';
             </h1>
             <p class="mt-2 text-xs sm:text-sm text-slate-500 leading-relaxed max-w-sm mx-auto">
                 Kami sudah mengirim kode 6 digit ke<br>
-                <strong class="text-slate-800 font-semibold"><?= htmlspecialchars($email) ?></strong>. Masukkan kode di bawah ini.
+                <strong class="text-slate-800 font-semibold"><?= htmlspecialchars($email !== '' ? $email : '(email tidak diketahui)') ?></strong>. Masukkan kode di bawah ini.
             </p>
 
             <!-- 6 Digit Error Inputs -->
             <form action="verifikasi-otp.php?email=<?= urlencode($email) ?>" method="POST" class="mt-6 space-y-4">
                 <?= csrf_field() ?>
                 <div class="flex items-center justify-center gap-2 sm:gap-3">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error" autofocus>
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" autocomplete="one-time-code" class="otp-input otp-digit error" autofocus>
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit error">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit error">
                 </div>
 
                 <!-- Error Message Alert -->
                 <div class="flex items-center justify-center gap-1.5 text-xs text-red-600 font-medium pt-1">
-                    <i data-lucide="alert-circle" class="w-4 h-4"></i>
-                    <span>Kode salah. Periksa kembali email kamu atau gunakan kode yang benar.</span>
+                    <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+                    <span><?= htmlspecialchars($errorMessage !== '' ? $errorMessage : 'Kode salah atau sudah kedaluwarsa. Periksa kembali email kamu atau minta kode baru.') ?></span>
                 </div>
 
                 <div class="pt-2">
@@ -145,9 +180,13 @@ require_once __DIR__ . '/includes/header.php';
 
                 <div class="pt-2 text-xs text-slate-500">
                     Tidak menerima kode? 
-                    <a href="verifikasi-otp.php?state=default&email=<?= urlencode($email) ?>" class="text-primary font-bold hover:underline">
-                        Kirim Ulang Kode
-                    </a>
+                    <?php if ($resendWait > 0): ?>
+                        <span class="font-medium">Tunggu <strong><?= (int) $resendWait ?></strong> detik untuk minta kode baru.</span>
+                    <?php else: ?>
+                        <a href="verifikasi-otp.php?state=kirim&email=<?= urlencode($email) ?>" class="text-primary font-bold hover:underline">
+                            Kirim Ulang Kode
+                        </a>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
@@ -165,12 +204,16 @@ require_once __DIR__ . '/includes/header.php';
             </h1>
             <p class="mt-2 text-xs sm:text-sm text-slate-500 leading-relaxed max-w-sm mx-auto">
                 Kami sudah mengirim kode 6 digit ke<br>
-                <strong class="text-slate-800 font-semibold"><?= htmlspecialchars($email) ?></strong>. Masukkan kode di bawah ini.
+                <strong class="text-slate-800 font-semibold"><?= htmlspecialchars($email !== '' ? $email : '(email tidak diketahui)') ?></strong>. Masukkan kode di bawah ini.
             </p>
 
-            <?php if (isset($_SESSION['pending_otp']['code'])): ?>
-                <div class="mt-3 p-2 bg-blue-50 text-blue-700 text-xs rounded-btn">
-                    Kode dikirim ke email kampus Anda. Kode tidak ditampilkan di halaman ini.
+            <div class="mt-3 p-2 bg-blue-50 text-blue-700 text-xs rounded-btn">
+                Kode berlaku <strong>10 menit</strong> dan hanya bisa dipakai sekali.
+            </div>
+
+            <?php if ($flash): ?>
+                <div class="mt-3 p-2.5 rounded-btn text-xs text-left flex items-start gap-2 <?= $flash['type'] === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : ($flash['type'] === 'error' ? 'bg-red-50 border border-red-200 text-red-800' : 'bg-amber-50 border border-amber-200 text-amber-800') ?>">
+                    <span><?= htmlspecialchars((string) $flash['message']) ?></span>
                 </div>
             <?php endif; ?>
 
@@ -178,12 +221,12 @@ require_once __DIR__ . '/includes/header.php';
             <form id="otpForm" action="verifikasi-otp.php?email=<?= urlencode($email) ?>" method="POST" class="mt-6 space-y-5">
                 <?= csrf_field() ?>
                 <div class="flex items-center justify-center gap-2 sm:gap-3">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit" autofocus>
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit">
-                    <input type="text" name="digits[]" maxlength="1" class="otp-input otp-digit">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" autocomplete="one-time-code" class="otp-input otp-digit" autofocus>
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit">
+                    <input type="text" name="digits[]" maxlength="1" inputmode="numeric" class="otp-input otp-digit">
                 </div>
 
                 <div class="pt-2">
@@ -192,9 +235,16 @@ require_once __DIR__ . '/includes/header.php';
                     </button>
                 </div>
 
-                <!-- Resend Timer -->
+                <!-- Resend -->
                 <div class="text-xs text-slate-500 pt-1">
-                    Kirim ulang kode dalam <span id="otpCountdown" class="font-bold text-slate-700">00:59</span>
+                    <?php if ($resendWait > 0): ?>
+                        Kirim ulang kode dalam <span id="otpCountdown" class="font-bold text-slate-700" data-wait="<?= (int) $resendWait ?>"><?= sprintf('%02d:%02d', intdiv((int) $resendWait, 60), (int) $resendWait % 60) ?></span>
+                    <?php else: ?>
+                        Tidak menerima kode?
+                        <a href="verifikasi-otp.php?state=kirim&email=<?= urlencode($email) ?>" class="text-primary font-bold hover:underline">
+                            Kirim Ulang Kode
+                        </a>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
@@ -209,7 +259,7 @@ document.addEventListener('DOMContentLoaded', function() {
     inputs.forEach((input, index) => {
         input.addEventListener('input', function(e) {
             if (this.value.length >= 1) {
-                this.value = this.value[0];
+                this.value = this.value[0].replace(/\D/, '');
                 if (index < inputs.length - 1) {
                     inputs[index + 1].focus();
                 }
@@ -229,26 +279,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 for (let i = 0; i < 6; i++) {
                     if (inputs[i]) inputs[i].value = text[i];
                 }
-                if (inputs[5]) inputs[5].focus();
             }
         });
     });
 
-    // Countdown timer
-    const countdownEl = document.getElementById('otpCountdown');
-    if (countdownEl) {
-        let sec = 59;
-        const timer = setInterval(() => {
-            sec--;
-            if (sec <= 0) {
-                clearInterval(timer);
-                countdownEl.parentElement.innerHTML = '<a href="verifikasi-otp.php?state=default&email=<?= urlencode($email) ?>" class="text-primary font-bold hover:underline">Kirim Ulang Kode Sekarang</a>';
-            } else {
-                countdownEl.textContent = '00:' + (sec < 10 ? '0' + sec : sec);
+    // Hitung mundur "kirim ulang" dari sisa waktu sebenarnya (bukan angka statis).
+    const countdown = document.getElementById('otpCountdown');
+    if (countdown) {
+        let left = parseInt(countdown.dataset.wait || '0', 10);
+        const tick = () => {
+            if (left <= 0) {
+                window.location.reload();
+                return;
             }
-        }, 1000);
+            countdown.textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
+            left -= 1;
+        };
+        tick();
+        setInterval(tick, 1000);
     }
 });
 </script>
-
 <?php require_once __DIR__ . '/includes/footer.php'; ?>

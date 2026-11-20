@@ -34,3 +34,9 @@ composer.phar
 
 # database runtime tidak boleh ikut repo publik
 includes/sip_barang.sqlite
+
+# Konfigurasi SMTP/kredensial email (jangan masuk repo publik)
+/includes/mail-config.php
+/includes/mail-config.php.*.tmp
+/includes/.otp-backfill-done
+/logs/

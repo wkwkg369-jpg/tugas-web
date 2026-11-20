@@ -8,8 +8,14 @@ $errorMessage = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $res = register_user($_POST);
     if ($res['success']) {
-        set_flash_message('success', 'Pendaftaran berhasil. Periksa email kampus Anda untuk kode verifikasi.');
-        header('Location: verifikasi-otp.php?email=' . urlencode($_POST['email']));
+        if (!empty($res['email_sent'])) {
+            set_flash_message('success', 'Pendaftaran berhasil. Kode verifikasi sudah dikirim ke email kampus Anda.');
+        } elseif (!sip_mail_ready()) {
+            set_flash_message('warning', 'Akun dibuat, tetapi pengiriman email belum aktif di server ini. Hubungi petugas keamanan kampus untuk verifikasi.');
+        } else {
+            set_flash_message('error', 'Akun dibuat, tetapi email verifikasi gagal terkirim. Buka halaman verifikasi lalu pilih "Kirim Ulang Kode".');
+        }
+        header('Location: verifikasi-otp.php?email=' . urlencode((string) $_POST['email']));
         exit;
     } else {
         $errorMessage = $res['message'];
@@ -21,6 +27,11 @@ $prodiLabels = [];
 foreach ($programStudi as $p) {
     $prodiLabels[] = $p['name'] . ' - ' . $p['fakultas'];
 }
+
+// Pendaftaran hanya menerima email kampus. Domain ditulis di konfigurasi agar
+// mudah diubah tanpa menyentuh kode.
+$allowedDomains = sip_allowed_email_domains();
+$domainText = implode(', ', array_map(fn($d) => '@' . $d, $allowedDomains));
 
 require_once __DIR__ . '/includes/navbar.php';
 ?>
@@ -156,6 +167,9 @@ require_once __DIR__ . '/includes/navbar.php';
                                     class="input-default pl-10"
                                 >
                             </div>
+                            <p class="mt-1.5 text-[11px] text-slate-500">
+                                Wajib email kampus (<?= htmlspecialchars($domainText) ?>). Kode verifikasi dikirim ke alamat ini.
+                            </p>
                         </div>
 
                         <!-- Nomor HP WhatsApp -->

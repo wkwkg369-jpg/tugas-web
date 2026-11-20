@@ -25,6 +25,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: index.php');
         }
         exit;
+    } elseif (!empty($res['verify_email'])) {
+        // Email belum terverifikasi: lanjutkan ke halaman kode, bukan gagal total.
+        set_flash_message('warning', $res['message']);
+        header('Location: verifikasi-otp.php?email=' . urlencode((string) $res['verify_email']));
+        exit;
     } else {
         $errorMessage = $res['message'];
     }

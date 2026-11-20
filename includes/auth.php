@@ -9,6 +9,7 @@ if (!ob_get_level()) {
 }
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/otp.php';
 
 // Safe session save path for portable / XAMPP / sandbox environments
 $sessionDir = __DIR__ . '/../sessions';
@@ -36,6 +37,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Header keamanan dasar (dikirim sekali, sebelum ada output).
 if (!headers_sent()) {
+    header_remove('X-Powered-By');
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
@@ -233,6 +235,25 @@ function login_user(string $identifier, string $password): array {
         return ['success' => false, 'message' => 'Akun ini dinonaktifkan. Hubungi petugas keamanan kampus.'];
     }
 
+    // Mahasiswa wajib sudah memverifikasi email (kode OTP). Akun petugas/admin
+    // dibuat oleh admin sehingga tidak melewati verifikasi email.
+    $role = (string) ($user['role'] ?? 'mahasiswa');
+    if ($role === 'mahasiswa'
+        && array_key_exists('email_verified_at', $user)
+        && empty($user['email_verified_at'])
+    ) {
+        // Terbitkan kode baru supaya pengguna bisa langsung menyelesaikan verifikasi.
+        $issued = sip_otp_issue((string) $user['email'], 'register');
+        sip_otp_send((string) $user['email'], $issued['code'], 'register', (string) ($user['nama'] ?? ''));
+        $_SESSION['pending_otp'] = ['email' => $user['email'], 'code' => $issued['code']];
+
+        return [
+            'success' => false,
+            'message' => 'Email belum diverifikasi. Kami sudah mengirim kode baru ke email kampus Anda.',
+            'verify_email' => $user['email'],
+        ];
+    }
+
     clear_login_failures($identifier);
 
     // Cegah session fixation: ganti ID sesi setelah autentikasi berhasil.
@@ -263,6 +284,18 @@ function register_user(array $data): array {
         return ['success' => false, 'message' => 'Semua kolom bertanda bintang (*) wajib diisi.'];
     }
 
+    // Hanya email kampus yang boleh mendaftar: kanal verifikasi satu-satunya
+    // adalah email, jadi alamat di luar domain resmi ditolak.
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['success' => false, 'message' => 'Format email tidak valid.'];
+    }
+    if (!sip_email_domain_allowed($email)) {
+        return [
+            'success' => false,
+            'message' => 'Gunakan email kampus (' . implode(', ', array_map(fn($d) => '@' . $d, sip_allowed_email_domains())) . ').'
+        ];
+    }
+
     // Check if email already used
     $existingEmail = db_fetch_one("SELECT id FROM users WHERE email = ?", [$email]);
     if ($existingEmail) {
@@ -288,20 +321,20 @@ function register_user(array $data): array {
     $newUser = db_fetch_one("SELECT * FROM users WHERE id = ?", [$newId]);
     unset($newUser['password']);
 
-    // Generate random 6-digit OTP
-    $otp = str_pad((string)random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-    db_execute("INSERT INTO otp_codes (email, code, type) VALUES (?, ?, 'register')", [$email, $otp]);
-    $_SESSION['pending_otp'] = [
-        'email' => $email,
-        'code' => $otp,
-        'user_id' => $newId
+    // Terbitkan kode 6 digit (berlaku 10 menit) lalu kirim lewat email.
+    // Kode disimpan sebagai OTP aktif; kode lama otomatis dibatalkan.
+    $issued = sip_otp_issue($email, 'register');
+    $sent = sip_otp_send($email, $issued['code'], 'register', $nama);
+    $_SESSION['pending_otp'] = ['email' => $email, 'code' => $issued['code']];
+
+    // Akun BELUM login. Login hanya diberikan setelah kode diverifikasi di
+    // verifikasi-otp.php, supaya verifikasi email benar-benar mengunci akses.
+    return [
+        'success'   => true,
+        'user'      => $newUser,
+        'email_sent' => $sent['ok'],
+        'mail_error' => $sent['ok'] ? '' : $sent['error'],
     ];
-
-    // Otomatis login sementara
-    $_SESSION['user_id'] = $newId;
-    $_SESSION['user'] = $newUser;
-
-    return ['success' => true, 'user' => $newUser, 'otp' => $otp];
 }
 
 /**
