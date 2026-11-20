@@ -2,6 +2,11 @@
 $page_title = 'Pengaturan Email - SIP-Barang Admin';
 $active_tab = 'email';
 require_once __DIR__ . '/includes/admin_header.php';
+
+// Halaman ini menyentuh kredensial sistem, jadi hanya Super Admin.
+// Petugas pos dan admin pusat ditolak di sini walau mengetik URL langsung.
+require_super_admin('index.php');
+
 require_once __DIR__ . '/includes/admin_sidebar.php';
 require_once __DIR__ . '/../includes/otp.php';
 
@@ -11,6 +16,10 @@ $saveOk = false;
 
 // Simpan konfigurasi SMTP dari panel admin.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'simpan') {
+    if (!can_manage_mail_config()) {
+        http_response_code(403);
+        exit('Akses ditolak.');
+    }
     $res = sip_mail_config_write([
         'mode'       => $_POST['mode'] ?? 'demo',
         'host'       => $_POST['host'] ?? '',

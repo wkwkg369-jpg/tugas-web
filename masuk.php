@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $res = login_user($inputIdentifier, $password);
     if ($res['success']) {
         set_flash_message('success', 'Selamat datang kembali, ' . htmlspecialchars($res['user']['nama']) . '!');
-        if ($res['user']['role'] === 'admin' || $res['user']['role'] === 'petugas') {
+        if ($res['user']['role'] === 'admin' || $res['user']['role'] === 'petugas' || $res['user']['role'] === 'super_admin') {
             header('Location: admin/index.php');
         } else {
             header('Location: index.php');

@@ -36,6 +36,15 @@ if (isset($_POST['ajax_action']) && $_POST['ajax_action'] === 'toggle_status') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
+    // Peran super_admin hanya boleh diberikan/dicabut oleh super_admin.
+    // Tanpa ini, admin pusat bisa menaikkan dirinya sendiri lewat POST langsung.
+    $requestedRole = trim($_POST['role'] ?? '');
+    if ($requestedRole === 'super_admin' && !is_super_admin() && in_array($action, ['tambah_pengguna', 'edit_pengguna'], true)) {
+        set_flash_message('error', 'Akses ditolak. Hanya Super Admin yang boleh memberikan peran Super Admin.');
+        header('Location: kelola-pengguna.php');
+        exit;
+    }
+
     // 1. Tambah Pengguna / Petugas
     if ($action === 'tambah_pengguna') {
         $nama = trim($_POST['nama'] ?? '');
@@ -85,6 +94,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $newPass = trim($_POST['new_password'] ?? '');
 
         if ($userId > 0 && !empty($nama) && !empty($email)) {
+            // Akun super admin hanya boleh diubah oleh super admin.
+            $target = db_fetch_one("SELECT role FROM users WHERE id = ?", [$userId]);
+            if ($target && ($target['role'] ?? '') === 'super_admin' && !is_super_admin()) {
+                set_flash_message('error', 'Akses ditolak. Akun Super Admin hanya dapat diubah oleh Super Admin.');
+                header('Location: kelola-pengguna.php');
+                exit;
+            }
             if (!empty($newPass)) {
                 if (strlen($newPass) < 8) {
                     set_flash_message('error', 'Kata sandi baru minimal 8 karakter. Perubahan tidak disimpan.');
@@ -111,6 +127,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 3. Reset Password User
     if ($action === 'reset_password') {
         $userId = intval($_POST['user_id'] ?? 0);
+        $target = db_fetch_one("SELECT role FROM users WHERE id = ?", [$userId]);
+        if ($target && ($target['role'] ?? '') === 'super_admin' && !is_super_admin()) {
+            set_flash_message('error', 'Akses ditolak. Kata sandi Super Admin hanya dapat direset oleh Super Admin.');
+            header('Location: kelola-pengguna.php');
+            exit;
+        }
         // Kata sandi sementara acak, bukan default yang mudah ditebak.
         $tempPass = bin2hex(random_bytes(6));
         db_execute("UPDATE users SET password = ? WHERE id = ?", [password_hash($tempPass, PASSWORD_DEFAULT), $userId]);
@@ -123,6 +145,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'hapus_pengguna') {
         $userId = intval($_POST['user_id'] ?? 0);
         $currentLoggedIn = get_logged_in_user();
+        $target = db_fetch_one("SELECT role FROM users WHERE id = ?", [$userId]);
+        if ($target && ($target['role'] ?? '') === 'super_admin' && !is_super_admin()) {
+            set_flash_message('error', 'Akses ditolak. Akun Super Admin hanya dapat dihapus oleh Super Admin.');
+            header('Location: kelola-pengguna.php');
+            exit;
+        }
         if ($currentLoggedIn && $currentLoggedIn['id'] == $userId) {
             set_flash_message('error', "Anda tidak dapat menghapus akun Anda sendiri saat sedang login!");
         } else {
@@ -176,6 +204,8 @@ if (!empty($filterPeran)) {
         $sql .= " AND role = 'petugas'";
     } elseif ($filterPeran === 'Admin Pusat') {
         $sql .= " AND role = 'admin'";
+    } elseif ($filterPeran === 'Super Admin') {
+        $sql .= " AND role = 'super_admin'";
     }
 }
 
@@ -233,6 +263,10 @@ $usersList = db_fetch_all($sql, $params);
                     </option>
                     <option value="Admin Pusat" <?= $filterPeran === 'Admin Pusat' ? 'selected' : '' ?>>Admin Pusat
                     </option>
+                    <?php if (is_super_admin()): ?>
+                        <option value="Super Admin" <?= $filterPeran === 'Super Admin' ? 'selected' : '' ?>>Super Admin
+                        </option>
+                    <?php endif; ?>
                 </select>
                 <i data-lucide="chevron-down"
                     class="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
@@ -309,6 +343,9 @@ $usersList = db_fetch_all($sql, $params);
                                 } elseif ($u['role'] === 'admin') {
                                     $roleLabel = 'Admin Pusat';
                                     $roleClass = 'bg-indigo-50 text-indigo-600';
+                                } elseif ($u['role'] === 'super_admin') {
+                                    $roleLabel = 'Super Admin';
+                                    $roleClass = 'bg-rose-50 text-rose-600';
                                 }
 
                                 // User JSON for JS modal inspection
@@ -437,6 +474,9 @@ $usersList = db_fetch_all($sql, $params);
                         <option value="petugas" selected>Petugas Pos Keamanan</option>
                         <option value="admin">Admin Pusat</option>
                         <option value="mahasiswa">Mahasiswa</option>
+                        <?php if (is_super_admin()): ?>
+                            <option value="super_admin">Super Admin (pengelola konfigurasi sistem)</option>
+                        <?php endif; ?>
                     </select>
                 </div>
             </div>
@@ -617,6 +657,9 @@ $usersList = db_fetch_all($sql, $params);
                         <option value="petugas">Petugas Pos Keamanan</option>
                         <option value="admin">Admin Pusat</option>
                         <option value="mahasiswa">Mahasiswa</option>
+                        <?php if (is_super_admin()): ?>
+                            <option value="super_admin">Super Admin (pengelola konfigurasi sistem)</option>
+                        <?php endif; ?>
                     </select>
                 </div>
             </div>

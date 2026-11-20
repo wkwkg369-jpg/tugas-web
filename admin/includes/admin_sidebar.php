@@ -67,16 +67,18 @@ $currentUser = get_logged_in_user();
             <span>Rekap Laporan</span>
         </a>
 
-        <!-- 9. Pengaturan Email -->
+        <!-- 9. Pengaturan Email — hanya Super Admin -->
         <?php require_once __DIR__ . '/../../includes/otp.php'; ?>
-        <?php $mailReady = sip_mail_ready(); ?>
-        <a href="uji-email.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm transition-all <?= $active_tab === 'email' ? 'bg-[#1E293B] text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium' ?>">
-            <i data-lucide="mail" class="w-5 h-5 <?= $active_tab === 'email' ? 'text-white' : 'text-slate-400' ?>"></i>
-            <span>Pengaturan Email</span>
-            <?php if (!$mailReady): ?>
-                <span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">DEMO</span>
-            <?php endif; ?>
-        </a>
+        <?php if (is_super_admin()): ?>
+            <?php $mailReady = sip_mail_ready(); ?>
+            <a href="uji-email.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm transition-all <?= $active_tab === 'email' ? 'bg-[#1E293B] text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium' ?>">
+                <i data-lucide="mail" class="w-5 h-5 <?= $active_tab === 'email' ? 'text-white' : 'text-slate-400' ?>"></i>
+                <span>Pengaturan Email</span>
+                <?php if (!$mailReady): ?>
+                    <span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">DEMO</span>
+                <?php endif; ?>
+            </a>
+        <?php endif; ?>
         <!-- 9. Notifikasi -->
         <?php $unreadNotif = get_unread_notifications_count(); ?>
         <a href="../notifikasi.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm transition-all text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium">

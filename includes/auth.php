@@ -117,11 +117,28 @@ function is_logged_in(): bool {
 }
 
 /**
+ * Daftar peran yang boleh masuk panel admin.
+ * super_admin sengaja ikut, karena ia peran paling tinggi.
+ */
+function admin_panel_roles(): array {
+    return ['super_admin', 'admin', 'petugas'];
+}
+
+/**
  * Check if user is an admin or officer
  */
 function is_admin(): bool {
     $user = get_logged_in_user();
-    return $user !== null && in_array($user['role'], ['admin', 'petugas']);
+    return $user !== null && in_array($user['role'], admin_panel_roles(), true);
+}
+
+/**
+ * Hanya super admin yang boleh mengubah konfigurasi sistem,
+ * misalnya kredensial SMTP.
+ */
+function is_super_admin(): bool {
+    $user = get_logged_in_user();
+    return $user !== null && ($user['role'] ?? '') === 'super_admin';
 }
 
 /**
@@ -144,6 +161,27 @@ function require_admin(string $redirect = '../masuk.php'): void {
         header("Location: {$redirect}");
         exit;
     }
+}
+
+/**
+ * Enforce super admin access.
+ * Dipakai halaman yang menyentuh konfigurasi sistem, seperti email/SMTP.
+ * Admin pusat dan petugas pos ditolak di sini, bukan hanya disembunyikan menunya.
+ */
+function require_super_admin(string $redirect = '../admin/index.php'): void {
+    if (!is_super_admin()) {
+        set_flash_message('error', 'Akses ditolak. Halaman ini hanya untuk Super Admin.');
+        header("Location: {$redirect}");
+        exit;
+    }
+}
+
+/**
+ * Cek apakah pengguna yang login boleh mengubah konfigurasi SMTP.
+ * Dipakai juga untuk menahan permintaan POST langsung, bukan hanya tampilan.
+ */
+function can_manage_mail_config(): bool {
+    return is_super_admin();
 }
 
 /**
