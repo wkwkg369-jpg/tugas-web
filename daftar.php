@@ -163,12 +163,14 @@ require_once __DIR__ . '/includes/navbar.php';
                                     name="email" 
                                     required
                                     value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
-                                    placeholder="budi.pratama@ui.ac.id" 
+                                    placeholder="nama.250170151@<?= htmlspecialchars($allowedDomains[0] ?? 'mhs.unimal.ac.id') ?>" 
+                                    title="Gunakan email kampus <?= htmlspecialchars($domainText) ?>"
                                     class="input-default pl-10"
                                 >
                             </div>
                             <p class="mt-1.5 text-[11px] text-slate-500">
-                                Wajib email kampus (<?= htmlspecialchars($domainText) ?>). Kode verifikasi dikirim ke alamat ini.
+                                Wajib email kampus <?= htmlspecialchars($domainText) ?>. Kode verifikasi dikirim ke alamat ini.
+                                Email lain (Gmail, Yahoo, dan sejenisnya) akan ditolak.
                             </p>
                         </div>
 
