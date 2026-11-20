@@ -266,7 +266,9 @@ function sip_otp_email_body(string $code, string $purpose = 'register', string $
           <div style="background:#eff6ff;border:1px dashed #93c5fd;border-radius:10px;padding:18px;text-align:center;">
             <div style="font-size:11px;letter-spacing:1.5px;color:#1d4ed8;font-weight:700;margin-bottom:6px;">KODE VERIFIKASI</div>
             <div style="font-size:34px;letter-spacing:8px;font-weight:700;color:#1e3a8a;font-family:Consolas,monospace;">' . $code . '</div>
+            <div style="font-size:12px;color:#1d4ed8;margin-top:8px;">Salin kode: <span style="font-family:Consolas,monospace;font-weight:700;">' . $code . '</span></div>
           </div>
+          <p style="margin:16px 0 0;font-size:13px;color:#334155;line-height:1.6;">Masukkan kode berikut di halaman verifikasi: <strong style="font-family:Consolas,monospace;font-size:15px;color:#0f172a;">' . $code . '</strong></p>
           <p style="margin:20px 0 0;font-size:13px;color:#64748b;line-height:1.6;">Kode ini berlaku <strong>10 menit</strong> dan hanya bisa dipakai sekali.</p>
           <p style="margin:8px 0 0;font-size:13px;color:#64748b;line-height:1.6;">Jika kamu tidak merasa melakukan pendaftaran, abaikan email ini.</p>
         </td></tr>
@@ -286,7 +288,18 @@ function sip_otp_send(string $email, string $code, string $purpose = 'register',
         : 'Kode Verifikasi Akun - SIP-Barang Kampus';
 
     $html = sip_otp_email_body($code, $purpose, $nama);
-    $text = "Kode verifikasi SIP-Barang Kampus: {$code}\n\nKode berlaku 10 menit dan hanya bisa dipakai sekali.\n";
+    $teksSapaan = $nama !== '' ? "Halo {$nama}," : 'Halo,';
+    $teksAksi = ($purpose === 'reset_password')
+        ? 'Kami menerima permintaan mengatur ulang kata sandi akun SIP-Barang Kampus kamu.'
+        : 'Terima kasih sudah mendaftar di SIP-Barang Kampus.';
+    $teks = "SIP-Barang Kampus\n\n"
+          . "{$teksSapaan}\n\n"
+          . "{$teksAksi}\n\n"
+          . "KODE VERIFIKASI: {$code}\n\n"
+          . "Masukkan kode 6 digit di atas pada halaman verifikasi.\n"
+          . "Kode berlaku 10 menit dan hanya bisa dipakai sekali.\n\n"
+          . "Jika kamu tidak merasa melakukan pendaftaran, abaikan email ini.\n"
+          . "Email otomatis, jangan dibalas.\n";
 
-    return sip_send_mail($email, $subject, $html, $text);
+    return sip_send_mail($email, $subject, $html, $teks);
 }
