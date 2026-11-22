@@ -1,13 +1,15 @@
 <?php
 $page_title = 'Tautkan WhatsApp - SIP-Barang Admin';
 $active_tab = 'whatsapp';
-require_once __DIR__ . '/includes/admin_header.php';
+
+// Autentikasi HARUS dimuat sebelum header: handler QR mengirim gambar,
+// jadi tidak boleh ada HTML yang sudah tercetak lebih dulu.
+require_once __DIR__ . '/../includes/db.php';
+require_once __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/wa.php';
 
 // Hanya Super Admin: halaman ini menampilkan QR yang bisa dipakai menautkan HP.
 require_super_admin('index.php');
-
-require_once __DIR__ . '/includes/admin_sidebar.php';
-require_once __DIR__ . '/../includes/wa.php';
 
 $cfg = sip_wa_config();
 $sessionId = trim((string) ($cfg['session_id'] ?? ''));
@@ -56,6 +58,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'pairi
 $status = $sessionId !== '' ? sip_wa_session_status() : ['ok' => false, 'error' => 'ID sesi belum diisi.', 'status' => '', 'phone' => ''];
 $siap = ($status['status'] ?? '') === 'ready';
 $qrTersedia = ($status['status'] ?? '') === 'qr_ready';
+
+// Baru sekarang cetak HTML halaman.
+require_once __DIR__ . '/includes/admin_header.php';
+require_once __DIR__ . '/includes/admin_sidebar.php';
 ?>
 <div class="flex-1 overflow-y-auto">
     <div class="px-8 py-6 max-w-3xl">
