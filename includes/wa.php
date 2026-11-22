@@ -42,6 +42,7 @@ function sip_wa_config(): array {
         'sender'         => SIP_WA_DEFAULT_SENDER,
         'timeout'        => 8,
         'notify_admins'  => true,
+        'admin_number'   => '',               // nomor WA khusus untuk peringatan staf
         'public_base_url'=> '',
     ];
 
@@ -107,6 +108,14 @@ function sip_wa_config_write(array $data): array {
 
     $notifyAdmins = !empty($data['notify_admins']);
 
+    $adminNumber = trim((string) ($data['admin_number'] ?? ''));
+    if ($adminNumber !== '') {
+        $adminNumber = sip_wa_normalize_number($adminNumber);
+        if ($adminNumber === '') {
+            return ['ok' => false, 'error' => 'Nomor WhatsApp admin tidak valid. Gunakan format 08… atau 62…'];
+        }
+    }
+
     if ($mode === 'openwa' && ($apiKey === '' || $sessionId === '')) {
         return ['ok' => false, 'error' => 'Mode OpenWA butuh ID sesi dan API key. API key bisa dibaca dari ./data/.api-key di server OpenWA.'];
     }
@@ -119,6 +128,7 @@ function sip_wa_config_write(array $data): array {
         'sender'          => $senderNorm,
         'timeout'         => $timeout,
         'notify_admins'   => $notifyAdmins,
+        'admin_number'    => $adminNumber,
         'public_base_url' => rtrim($publicBase, '/'),
     ];
 
@@ -321,6 +331,38 @@ function sip_wa_log_error(string $line): void {
 }
 
 /**
+ * Nomor yang dilaporkan WhatsApp "not registered" disimpan sebentar agar
+ * nomor contoh/palsu di database tidak dikirimi pesan berulang kali.
+ * @return array<string,int>
+ */
+function sip_wa_unregistered_map(): array {
+    $file = __DIR__ . '/../logs/wa-unregistered.json';
+    if (!is_file($file)) {
+        return [];
+    }
+    $data = json_decode((string) @file_get_contents($file), true);
+    if (!is_array($data)) {
+        return [];
+    }
+    $batas = time() - 7 * 86400;
+    return array_filter($data, static fn($ts) => (int) $ts >= $batas);
+}
+
+function sip_wa_mark_unregistered(string $number): void {
+    $norm = sip_wa_normalize_number($number);
+    if ($norm === '') {
+        return;
+    }
+    $map = sip_wa_unregistered_map();
+    $map[$norm] = time();
+    $dir = __DIR__ . '/../logs';
+    if (!is_dir($dir)) {
+        @mkdir($dir, 0775, true);
+    }
+    @file_put_contents($dir . '/wa-unregistered.json', json_encode($map), LOCK_EX);
+}
+
+/**
  * Apakah user ini berhak menerima notifikasi WhatsApp.
  * Notifikasi WhatsApp hanya untuk staf (admin/petugas/super admin) dan
  * pemilik notifikasi pribadi; isi pesan admin tidak pernah dibocorkan.
@@ -381,14 +423,25 @@ function sip_wa_notify_user_id(int $userId, string $judul, string $pesan, string
  * nomor pengirim (staf pos) alih-alih satu pesan per admin.
  */
 function sip_wa_notify_number(string $number, string $judul, string $pesan, string $link = '#'): bool {
-    if (!sip_wa_ready() || sip_wa_normalize_number($number) === '') {
+    $norm = sip_wa_normalize_number($number);
+    if (!sip_wa_ready() || $norm === '') {
         return false;
     }
+
+    // Nomor yang sudah terbukti tidak punya WhatsApp dilewati selama 7 hari
+    // (banyak nomor contoh di database, mis. 08123456789).
+    if (isset(sip_wa_unregistered_map()[$norm])) {
+        return false;
+    }
+
     $cfg = sip_wa_config();
     try {
-        $res = sip_wa_send_text($number, sip_wa_format_message($cfg, $judul, $pesan, $link));
+        $res = sip_wa_send_text($norm, sip_wa_format_message($cfg, $judul, $pesan, $link));
         if (!$res['ok'] && !$res['skipped']) {
-            sip_wa_log_error('nomor ' . substr(sip_wa_normalize_number($number), 0, 6) . '*** ' . $res['error']);
+            if (stripos($res['error'], 'not registered') !== false) {
+                sip_wa_mark_unregistered($norm);
+            }
+            sip_wa_log_error('nomor ' . substr($norm, 0, 6) . '*** ' . $res['error']);
         }
         return $res['ok'];
     } catch (Throwable $e) {

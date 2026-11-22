@@ -261,28 +261,41 @@ function notify_user(?int $userId, string $judul, string $pesan, string $icon = 
 function notify_admins(string $judul, string $pesan, string $icon = 'bell', string $link = '#'): int {
     $rows = db_fetch_all("SELECT id, phone FROM users WHERE role IN ('admin', 'petugas', 'super_admin')");
     $terkirim = 0;
-    $nomorTerkirim = [];
-    $cfg = sip_wa_config();
-    $waAdminAktif = sip_wa_ready() && !empty($cfg['notify_admins']);
 
     foreach ($rows as $r) {
-        $userId = (int) $r['id'];
-        // Simpan in-app tanpa memicu WhatsApp dulu (WA dianggap setelah loop).
+        // Simpan in-app untuk semua staf.
         if (db_execute(
             "INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link, created_at)
              VALUES (?, ?, ?, ?, 1, ?, ?)",
-            [$userId, $judul, $pesan, $icon, $link, date('Y-m-d H:i:s')]
+            [(int) $r['id'], $judul, $pesan, $icon, $link, date('Y-m-d H:i:s')]
         )) {
             $terkirim++;
+        }
+    }
 
-            // Satu WhatsApp per nomor unik, maksimal beberapa penerima, supaya
-            // akun pengirim tidak cepat ditandai spam oleh WhatsApp.
-            if ($waAdminAktif && count($nomorTerkirim) < SIP_WA_MAX_ADMIN_RECIPIENTS) {
-                $norm = sip_wa_normalize_number((string) ($r['phone'] ?? ''));
-                if ($norm !== '' && !isset($nomorTerkirim[$norm])) {
-                    $nomorTerkirim[$norm] = sip_wa_notify_number($norm, $judul, $pesan, $link);
-                }
-            }
+    $cfg = sip_wa_config();
+    if (!sip_wa_ready() || empty($cfg['notify_admins'])) {
+        return $terkirim;
+    }
+
+    // Bila admin mengisi nomor khusus, kirim ke situ saja: nomor staf di
+    // database sering masih contoh/palsu.
+    $khusus = sip_wa_normalize_number((string) ($cfg['admin_number'] ?? ''));
+    if ($khusus !== '') {
+        sip_wa_notify_number($khusus, $judul, $pesan, $link);
+        return $terkirim;
+    }
+
+    $nomorTerkirim = [];
+    foreach ($rows as $r) {
+        // Satu WhatsApp per nomor unik, maksimal beberapa penerima, supaya
+        // akun pengirim tidak cepat ditandai spam oleh WhatsApp.
+        if (count($nomorTerkirim) >= SIP_WA_MAX_ADMIN_RECIPIENTS) {
+            break;
+        }
+        $norm = sip_wa_normalize_number((string) ($r['phone'] ?? ''));
+        if ($norm !== '' && !isset($nomorTerkirim[$norm])) {
+            $nomorTerkirim[$norm] = sip_wa_notify_number($norm, $judul, $pesan, $link);
         }
     }
     return $terkirim;

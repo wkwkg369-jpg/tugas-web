@@ -22,6 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'simpa
         'sender'          => $_POST['sender'] ?? '',
         'timeout'         => $_POST['timeout'] ?? 8,
         'notify_admins'   => isset($_POST['notify_admins']),
+        'admin_number'    => $_POST['admin_number'] ?? '',
         'public_base_url' => $_POST['public_base_url'] ?? '',
     ]);
     if ($res['ok']) {
@@ -206,6 +207,12 @@ $userStats = db_fetch_one(
                 <div>
                     <label class="block text-xs font-semibold text-slate-600 mb-1.5">Alamat situs (tautan di pesan)</label>
                     <input type="text" name="public_base_url" value="<?= htmlspecialchars((string) $cfg['public_base_url']) ?>" placeholder="https://aralfian.my.id" class="input-default w-full">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1.5">Nomor WhatsApp admin (opsional)</label>
+                    <input type="tel" name="admin_number" value="<?= htmlspecialchars((string) ($cfg['admin_number'] ?? '')) ?>" placeholder="085199816361" class="input-default w-full">
+                    <p class="text-[11px] text-slate-500 mt-1">Bila diisi, notifikasi staf hanya dikirim ke nomor ini, bukan ke nomor admin di database.</p>
                 </div>
 
                 <label class="flex items-start gap-2.5 text-xs text-slate-600">

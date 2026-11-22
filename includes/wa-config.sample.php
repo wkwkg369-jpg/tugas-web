@@ -32,6 +32,10 @@ return [
     // Laporan/klaim baru juga diteruskan ke WhatsApp staf pos.
     'notify_admins' => true,
 
+    // Opsional: satu nomor WhatsApp untuk semua peringatan staf. Bila diisi,
+    // nomor admin di database tidak dipakai (banyak yang masih contoh).
+    'admin_number'  => '6285199816361',
+
     // Dipakai untuk membuat tautan lengkap di pesan WhatsApp.
     'public_base_url' => 'https://aralfian.my.id',
 ];
