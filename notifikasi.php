@@ -29,10 +29,16 @@ require_once __DIR__ . '/includes/navbar.php';
                     Informasi terkini mengenai perkembangan laporan dan klaim barang Anda.
                 </p>
             </div>
-            <a href="<?= csrf_link("notifikasi.php?action=read_all") ?>" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
-                <i data-lucide="check-check" class="w-4 h-4"></i>
-                <span>Tandai semua dibaca</span>
-            </a>
+            <div class="flex items-center gap-4">
+                <a href="pengaturan-wa.php" class="text-xs text-emerald-700 font-semibold hover:underline flex items-center gap-1">
+                    <i data-lucide="message-circle" class="w-4 h-4"></i>
+                    <span>Atur WhatsApp</span>
+                </a>
+                <a href="<?= csrf_link("notifikasi.php?action=read_all") ?>" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
+                    <i data-lucide="check-check" class="w-4 h-4"></i>
+                    <span>Tandai semua dibaca</span>
+                </a>
+            </div>
         </div>
 
         <!-- Container Notifikasi (Figma: Container Notifikasi 800x520) -->

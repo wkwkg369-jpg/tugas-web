@@ -227,19 +227,31 @@ function create_claim(array $d): array {
 
 // Data Notifikasi
 
+require_once __DIR__ . '/wa.php';
+
 /**
  * Kirim satu notifikasi ke pengguna tertentu.
  * Dilewati bila user tidak valid, dan created_at diisi eksplisit agar urutan waktu benar.
+ * Bila mode WhatsApp aktif, pesan yang sama juga dikirim ke nomor WhatsApp
+ * pengguna (lihat includes/wa.php). Kegagalan WhatsApp tidak membatalkan notifikasi in-app.
  */
 function notify_user(?int $userId, string $judul, string $pesan, string $icon = 'bell', string $link = '#'): bool {
     if (!$userId || (int) $userId <= 0) {
         return false;
     }
-    return db_execute(
+    $tersimpan = db_execute(
         "INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link, created_at)
          VALUES (?, ?, ?, ?, 1, ?, ?)",
         [(int) $userId, $judul, $pesan, $icon, $link, date('Y-m-d H:i:s')]
     );
+
+    // Hanya kirim WhatsApp setelah in-app tersimpan, agar halaman tidak
+    // menunggu jaringan saat penyimpanan gagal.
+    if ($tersimpan) {
+        sip_wa_notify_user_id((int) $userId, $judul, $pesan, $link);
+    }
+
+    return $tersimpan;
 }
 
 /**
@@ -247,11 +259,30 @@ function notify_user(?int $userId, string $judul, string $pesan, string $icon = 
  * Dipakai saat ada laporan baru / barang diserahkan agar petugas tahu ada antrean.
  */
 function notify_admins(string $judul, string $pesan, string $icon = 'bell', string $link = '#'): int {
-    $rows = db_fetch_all("SELECT id FROM users WHERE role IN ('admin', 'petugas')");
+    $rows = db_fetch_all("SELECT id, phone FROM users WHERE role IN ('admin', 'petugas', 'super_admin')");
     $terkirim = 0;
+    $nomorTerkirim = [];
+    $cfg = sip_wa_config();
+    $waAdminAktif = sip_wa_ready() && !empty($cfg['notify_admins']);
+
     foreach ($rows as $r) {
-        if (notify_user((int) $r['id'], $judul, $pesan, $icon, $link)) {
+        $userId = (int) $r['id'];
+        // Simpan in-app tanpa memicu WhatsApp dulu (WA dianggap setelah loop).
+        if (db_execute(
+            "INSERT INTO notifications (user_id, judul, pesan, icon, is_unread, link, created_at)
+             VALUES (?, ?, ?, ?, 1, ?, ?)",
+            [$userId, $judul, $pesan, $icon, $link, date('Y-m-d H:i:s')]
+        )) {
             $terkirim++;
+
+            // Satu WhatsApp per nomor unik, maksimal beberapa penerima, supaya
+            // akun pengirim tidak cepat ditandai spam oleh WhatsApp.
+            if ($waAdminAktif && count($nomorTerkirim) < SIP_WA_MAX_ADMIN_RECIPIENTS) {
+                $norm = sip_wa_normalize_number((string) ($r['phone'] ?? ''));
+                if ($norm !== '' && !isset($nomorTerkirim[$norm])) {
+                    $nomorTerkirim[$norm] = sip_wa_notify_number($norm, $judul, $pesan, $link);
+                }
+            }
         }
     }
     return $terkirim;

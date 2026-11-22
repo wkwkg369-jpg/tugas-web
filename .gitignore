@@ -38,5 +38,9 @@ includes/sip_barang.sqlite
 # Konfigurasi SMTP/kredensial email (jangan masuk repo publik)
 /includes/mail-config.php
 /includes/mail-config.php.*.tmp
+
+# Konfigurasi OpenWA / WhatsApp (API key jangan masuk repo publik)
+/includes/wa-config.php
+/includes/wa-config.php.tmp
 /includes/.otp-backfill-done
 /logs/

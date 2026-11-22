@@ -78,6 +78,15 @@ $currentUser = get_logged_in_user();
                     <span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">DEMO</span>
                 <?php endif; ?>
             </a>
+            <?php require_once __DIR__ . '/../../includes/wa.php'; ?>
+            <?php $waReady = sip_wa_ready(); ?>
+            <a href="pengaturan-wa.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm transition-all <?= $active_tab === 'whatsapp' ? 'bg-[#1E293B] text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium' ?>">
+                <i data-lucide="message-circle" class="w-5 h-5 <?= $active_tab === 'whatsapp' ? 'text-white' : 'text-slate-400' ?>"></i>
+                <span>Pengaturan WhatsApp</span>
+                <?php if (!$waReady): ?>
+                    <span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">OFF</span>
+                <?php endif; ?>
+            </a>
         <?php endif; ?>
         <!-- 9. Notifikasi -->
         <?php $unreadNotif = get_unread_notifications_count(); ?>
