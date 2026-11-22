@@ -87,6 +87,10 @@ $currentUser = get_logged_in_user();
                     <span class="ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">OFF</span>
                 <?php endif; ?>
             </a>
+            <a href="tautkan-wa.php" class="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm transition-all <?= $active_tab === 'tautkan_wa' ? 'bg-[#1E293B] text-white font-semibold shadow-sm' : 'text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium' ?>">
+                <i data-lucide="qr-code" class="w-5 h-5 <?= $active_tab === 'tautkan_wa' ? 'text-white' : 'text-slate-400' ?>"></i>
+                <span>Tautkan WhatsApp</span>
+            </a>
         <?php endif; ?>
         <!-- 9. Notifikasi -->
         <?php $unreadNotif = get_unread_notifications_count(); ?>
