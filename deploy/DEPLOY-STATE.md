@@ -8,7 +8,7 @@
 |---|---|
 | Sumber kode | GitHub `wkwkg369-jpg/tugas-web`, branch `main`, commit **f3ccf1d** ("update fitur admin, auth, dan laporan") |
 | Lokasi | `/var/www/sip-kampus` (milik `www-data`) |
-| Database | SQLite `includes/sip_barang.sqlite` (fallback otomatis; MySQL tidak tersedia di VPS) |
+| Database | **MySQL 8.4** `sip_barang_kampus` (migrasi 24 Nov 2026); SQLite disimpan sebagai rollback |
 | Web server | nginx + `php -S 127.0.0.1:8000` (service `sip-kampus.service`, jalan sebagai `www-data`) |
 
 Versi sebelumnya (backend SQLite buatan sesi lalu) disimpan sebagai branch
@@ -102,3 +102,17 @@ tail -f /var/log/nginx/sip-access.log
 Catatan: `includes/sip_barang.sqlite` ikut ter-versi di repo, jadi `git reset --hard`
 akan mengembalikan isi database ke kondisi commit tersebut (data contoh hilang bila
 belum di-commit). Seeding ulang: `php deploy/seed-demo.php`.
+
+## Database MySQL (24 Nov 2026)
+
+- Engine: MySQL 8.4 (`mysql-server`), service `mysql`, listen `127.0.0.1:3306`.
+- Extension PHP: `pdo_mysql` + `mysqli` (`php8.5-mysql`).
+- Database `sip_barang_kampus`, user aplikasi `sip_app`@`127.0.0.1`. Kredensial
+  hanya ada di `.env` (mode 640, `root:www-data`), tidak di repo.
+- Konfigurasi dibaca aplikasi dari `.env`: `DB_DRIVER=mysql`, `DB_HOST`, `DB_PORT`,
+  `DB_NAME`, `DB_USER`, `DB_PASS`. Dengan `DB_DRIVER=mysql` aplikasi **tidak**
+  diam-diam fallback ke SQLite (mencegah data terpecah).
+- Migrasi data: 14 users, 5 items, 1 claim, 76 notifications, 8 OTP, 5 prodi,
+  6 kategori, 9 lokasi, 4 login_attempts. ID dipertahankan, AUTO_INCREMENT disetel.
+- Rollback: salinan SQLite + berkas PHP lama di `/root/backup-mysql-20261124-040015/`.
+  Kembalikan `DB_DRIVER=sqlite` di `.env` lalu restart service.

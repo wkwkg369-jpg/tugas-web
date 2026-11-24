@@ -26,6 +26,9 @@ composer.phar
 .env
 .env.local
 .env.*.local
+.env.*
+!.env.example
+.env.server
 
 # Sesi PHP & hasil upload runtime
 /sessions/sess_*
