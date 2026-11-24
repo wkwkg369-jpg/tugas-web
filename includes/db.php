@@ -10,6 +10,52 @@
  * Menjamin aplikasi 100% langsung dapat berjalan tanpa error konfigurasi.
  */
 
+/**
+ * Muat berkas .env lokal tanpa menimpa variabel environment yang sudah ada.
+ * Nilai hanya masuk ke process memory, tidak pernah ditulis ke kode, database, atau log.
+ * Berkas .env diabaikan git (lihat .gitignore).
+ */
+function sip_load_env_file(): void {
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+    $file = getenv('SIP_ENV_FILE');
+    if (!is_string($file) || $file === '') {
+        $file = dirname(__DIR__) . '/.env';
+    }
+    if (!is_file($file) || !is_readable($file)) {
+        return;
+    }
+    $lines = @file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    if (!is_array($lines)) {
+        return;
+    }
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || $line[0] === '#' || strpos($line, '=') === false) {
+            continue;
+        }
+        [$key, $value] = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
+        if ($key === '' || getenv($key) !== false) {
+            continue;
+        }
+        $len = strlen($value);
+        if ($len >= 2 &&
+            (($value[0] === '"' && $value[$len - 1] === '"') ||
+             ($value[0] === "'" && $value[$len - 1] === "'"))) {
+            $value = substr($value, 1, $len - 2);
+        }
+        putenv($key . '=' . $value);
+        $_ENV[$key] = $value;
+    }
+}
+
+sip_load_env_file();
+
 class Database {
     private static ?PDO $instance = null;
     private static string $driver = '';
@@ -19,34 +65,43 @@ class Database {
             return self::$instance;
         }
 
-        // Coba koneksi ke MySQL XAMPP terlebih dahulu
-        $mysqlHost = '127.0.0.1';
-        $mysqlPort = '3306';
-        $mysqlUser = 'root';
-        $mysqlPass = '';
-        $dbName = 'sip_barang_kampus';
+        // Konfigurasi engine lewat environment (.env); default tetap kompatibel XAMPP.
+        $pref       = strtolower(trim((string) (getenv('DB_DRIVER') ?: 'mysql')));
+        $mysqlHost  = (string) (getenv('DB_HOST') ?: '127.0.0.1');
+        $mysqlPort  = (string) (getenv('DB_PORT') ?: '3306');
+        $mysqlUser  = (string) (getenv('DB_USER') ?: 'root');
+        $mysqlPass  = (string) (getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
+        $dbName     = (string) (getenv('DB_NAME') ?: 'sip_barang_kampus');
+        $sqlitePath = (string) (getenv('DB_SQLITE_PATH') ?: (__DIR__ . '/sip_barang.sqlite'));
 
-        try {
-            // Coba koneksi ke server MySQL tanpa nama DB dulu untuk create database jika belum ada
-            $dsn = "mysql:host={$mysqlHost};port={$mysqlPort};charset=utf8mb4";
-            $pdo = new PDO($dsn, $mysqlUser, $mysqlPass, [
-                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_TIMEOUT => 2
-            ]);
+        if ($pref !== 'sqlite') {
+            try {
+                // Koneksi tanpa nama DB dulu agar database bisa dibuat otomatis.
+                $dsn = "mysql:host={$mysqlHost};port={$mysqlPort};charset=utf8mb4";
+                $pdo = new PDO($dsn, $mysqlUser, $mysqlPass, [
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::ATTR_TIMEOUT            => 3
+                ]);
 
-            // Buat database jika belum ada
-            $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-            $pdo->exec("USE `{$dbName}`");
+                $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+                $pdo->exec("USE `{$dbName}`");
 
-            self::$instance = $pdo;
-            self::$driver = 'mysql';
-        } catch (Throwable $e) {
-            // Jika MySQL gagal (belum di-start di XAMPP), gunakan SQLite fallback
-            $sqlitePath = __DIR__ . '/sip_barang.sqlite';
+                self::$instance = $pdo;
+                self::$driver = 'mysql';
+            } catch (Throwable $e) {
+                error_log('sip_db: MySQL gagal: ' . $e->getMessage());
+                if ($pref === 'mysql') {
+                    // MySQL dipilih eksplisit: jangan diam-diam pindah engine dan memecah data.
+                    throw new RuntimeException('Database MySQL tidak bisa dihubungi: ' . $e->getMessage());
+                }
+            }
+        }
+
+        if (self::$instance === null) {
             try {
                 $pdo = new PDO("sqlite:" . $sqlitePath, null, null, [
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
                 ]);
                 $pdo->exec("PRAGMA foreign_keys = ON;");
@@ -56,7 +111,6 @@ class Database {
                 die("Gagal menginisialisasi database: " . $se->getMessage());
             }
         }
-
         // Inisialisasi tabel dan seed data jika belum ada
         self::initSchema(self::$instance, self::$driver);
 
@@ -194,8 +248,11 @@ class Database {
                     `email` VARCHAR(150) UNIQUE NOT NULL,
                     `phone` VARCHAR(30) NULL,
                     `password` VARCHAR(255) NOT NULL,
-                    `role` ENUM('mahasiswa', 'admin', 'petugas') NOT NULL DEFAULT 'mahasiswa',
+                    `role` ENUM('mahasiswa', 'admin', 'petugas', 'super_admin') NOT NULL DEFAULT 'mahasiswa',
                     `avatar` VARCHAR(255) NULL,
+                    `status` VARCHAR(20) NULL,
+                    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                    `email_verified_at` DATETIME NULL,
                     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -270,6 +327,8 @@ class Database {
                     `code` VARCHAR(10) NOT NULL,
                     `type` VARCHAR(50) DEFAULT 'register',
                     `is_used` TINYINT(1) DEFAULT 0,
+                    `expires_at` DATETIME NULL,
+                    `attempts` INT NOT NULL DEFAULT 0,
                     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             ");

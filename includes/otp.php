@@ -95,9 +95,24 @@ function sip_otp_ensure_schema(): void {
                 $db->exec("ALTER TABLE users ADD COLUMN email_verified_at DATETIME NULL");
             }
         } else {
-            $db->exec("ALTER TABLE otp_codes ADD COLUMN expires_at DATETIME NULL");
-            $db->exec("ALTER TABLE otp_codes ADD COLUMN attempts INT NOT NULL DEFAULT 0");
-            $db->exec("ALTER TABLE users ADD COLUMN email_verified_at DATETIME NULL");
+            $cols = [];
+            foreach ($db->query("SHOW COLUMNS FROM otp_codes") as $c) {
+                $cols[] = $c["Field"];
+            }
+            if (!in_array("expires_at", $cols, true)) {
+                $db->exec("ALTER TABLE otp_codes ADD COLUMN expires_at DATETIME NULL");
+            }
+            if (!in_array("attempts", $cols, true)) {
+                $db->exec("ALTER TABLE otp_codes ADD COLUMN attempts INT NOT NULL DEFAULT 0");
+            }
+
+            $ucols = [];
+            foreach ($db->query("SHOW COLUMNS FROM users") as $c) {
+                $ucols[] = $c["Field"];
+            }
+            if (!in_array("email_verified_at", $ucols, true)) {
+                $db->exec("ALTER TABLE users ADD COLUMN email_verified_at DATETIME NULL");
+            }
         }
     } catch (Throwable $e) {
         // Kolom sudah ada (MySQL tidak punya IF NOT EXISTS untuk ADD COLUMN): abaikan.

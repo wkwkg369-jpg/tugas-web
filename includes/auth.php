@@ -190,12 +190,23 @@ function can_manage_mail_config(): bool {
  */
 function ensure_login_attempts_table(): void {
     try {
-        get_db()->exec("CREATE TABLE IF NOT EXISTS login_attempts (
-            attempt_key TEXT PRIMARY KEY,
-            attempts INTEGER NOT NULL DEFAULT 0,
-            first_at INTEGER NOT NULL,
-            last_at INTEGER NOT NULL
-        )");
+        $db = get_db();
+        if (Database::getDriver() === 'sqlite') {
+            $db->exec("CREATE TABLE IF NOT EXISTS login_attempts (
+                attempt_key TEXT PRIMARY KEY,
+                attempts INTEGER NOT NULL DEFAULT 0,
+                first_at INTEGER NOT NULL,
+                last_at INTEGER NOT NULL
+            )");
+        } else {
+            // MySQL tidak menerima PRIMARY KEY pada TEXT tanpa panjang.
+            $db->exec("CREATE TABLE IF NOT EXISTS login_attempts (
+                attempt_key VARCHAR(64) PRIMARY KEY,
+                attempts INT NOT NULL DEFAULT 0,
+                first_at BIGINT NOT NULL,
+                last_at BIGINT NOT NULL
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        }
     } catch (Throwable $e) {
         // Tabel sudah ada pada engine lain; abaikan.
     }
@@ -251,6 +262,16 @@ function login_user(string $identifier, string $password): array {
         return ['success' => false, 'message' => 'Email/NIM dan kata sandi wajib diisi.'];
     }
 
+    // Sinkronkan hash super admin dengan SUPER_ADMIN_PASSWORD sebelum verifikasi.
+    // Bila env belum diatur, akun super admin memakai hash terakhir yang sah
+    // (bukan kata sandi bawaan yang bisa ditebak).
+    try {
+        require_once __DIR__ . '/super-admin.php';
+        rotate_super_admin_password_if_needed();
+    } catch (Throwable $e) {
+        error_log('sip_super_admin: ' . $e->getMessage());
+    }
+
     if (is_login_throttled($identifier)) {
         return ['success' => false, 'message' => 'Terlalu banyak percobaan masuk. Coba lagi dalam 15 menit.'];
     }
@@ -271,6 +292,17 @@ function login_user(string $identifier, string $password): array {
     // Akun yang dinonaktifkan admin tidak boleh masuk.
     if (isset($user['is_active']) && (int) $user['is_active'] === 0) {
         return ['success' => false, 'message' => 'Akun ini dinonaktifkan. Hubungi petugas keamanan kampus.'];
+    }
+
+    // Kata sandi super admin dikelola dari env SUPER_ADMIN_PASSWORD: setelah
+    // login berhasil, pastikan hash akun tetap sinkron dengan nilai env.
+    if (($user['role'] ?? '') === 'super_admin') {
+        try {
+            require_once __DIR__ . '/super-admin.php';
+            ensure_super_admin_password();
+        } catch (Throwable $e) {
+            error_log('sip_super_admin: ' . $e->getMessage());
+        }
     }
 
     // Mahasiswa wajib sudah memverifikasi email (kode OTP). Akun petugas/admin
